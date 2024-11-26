@@ -13,12 +13,16 @@ const ProductSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  inventory: {
+    type: Number,
+    required: true
+  },
   shop: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Shop',
     required: true
   },
-  date: {
+  createdAt: {
     type: Date,
     default: Date.now
   }

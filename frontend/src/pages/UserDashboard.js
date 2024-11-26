@@ -6,7 +6,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import api from '../utils/api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -27,7 +27,6 @@ const UserDashboard = () => {
 
   const fetchShops = useCallback(async () => {
     try {
-      console.log('Token in localStorage:', localStorage.getItem('token'));
       const response = await api.get('/shops');
       console.log('Fetched shops:', response.data);
       setShops(response.data);
@@ -36,34 +35,23 @@ const UserDashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching shops:', error);
-      console.log('Error response:', error.response);
-      if (error.response && error.response.status === 401) {
-        logout();
-        navigate('/login');
-      } else {
-        setFetchError('Unable to fetch shops. Please try again later.');
-      }
+      setFetchError('Unable to fetch shops. Please try again later.');
     } finally {
       setFetchingShops(false);
     }
-  }, [logout, navigate]);
+  }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     if (user) {
       fetchShops();
     }
   }, [user, fetchShops]);
 
-
-const filteredShops = shops.filter(shop => {
-    if (filter === 'all') return true;
-    return shop.isPublic === (filter === 'public');
-  });
-
-  const handleShopClick = (shop) => {
-    setSelectedShop(shop);
-    setMapCenter([shop.latitude || 51.505, shop.longitude || -0.09]);
-  };
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/login');
+    }
+  }, [loading, user, navigate]);
 
   if (loading) {
     return (
@@ -78,6 +66,17 @@ const filteredShops = shops.filter(shop => {
   if (!user) {
     return null;
   }
+
+  const filteredShops = shops.filter(shop => {
+    if (filter === 'all') return true;
+    return shop.isPublic === (filter === 'public');
+  });
+
+  const handleShopClick = (shop) => {
+    setSelectedShop(shop);
+    setMapCenter([shop.latitude || 51.505, shop.longitude || -0.09]);
+  };
+
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -156,7 +155,11 @@ const filteredShops = shops.filter(shop => {
                     onClick={() => handleShopClick(shop)}
                   >
                     <CardContent>
-                      <Typography variant="subtitle1">{shop.name}</Typography>
+                      <Typography variant="subtitle1">
+                        <Link to={`/shop/${shop._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                          {shop.name}
+                        </Link>
+                      </Typography>
                       <Typography variant="body2">{shop.address || 'No physical address'}</Typography>
                       <Typography variant="caption" color="text.secondary">
                         {shop.isPublic ? 'Public' : 'Private'}
@@ -182,6 +185,15 @@ const filteredShops = shops.filter(shop => {
             <Typography variant="body2" color="text.secondary">
               Type: {selectedShop.isPublic ? 'Public' : 'Private'}
             </Typography>
+            <Button 
+              component={Link} 
+              to={`/shop/${selectedShop._id}`} 
+              variant="contained" 
+              color="primary" 
+              sx={{ mt: 2 }}
+            >
+              View Shop
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -190,4 +202,3 @@ const filteredShops = shops.filter(shop => {
 };
 
 export default UserDashboard;
-

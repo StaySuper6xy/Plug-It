@@ -6,9 +6,9 @@ const auth = require('../middleware/auth');
 
 // Get all shops
 router.get('/', auth, async (req, res) => {
-  console.log('GET /shops route hit'); // Add this line
+  console.log('GET /shops route hit');
   try {
-    const shops = await Shop.find({ user: req.user.id });
+    const shops = await Shop.find({ owner: req.user.id });
     res.json(shops);
   } catch (err) {
     console.error(err.message);
@@ -40,7 +40,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // Get shop by ID
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
@@ -111,10 +111,89 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // Get products for a shop
-router.get('/:id/products', auth, async (req, res) => {
+router.get('/:id/products', async (req, res) => {
   try {
     const products = await Product.find({ shop: req.params.id });
     res.json(products);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Get all products for a shop
+router.get('/:shopId/products', auth, async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ msg: 'Shop not found' });
+    }
+    const products = await Product.find({ shop: req.params.shopId });
+    res.json(products);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Add a new product to a shop
+router.post('/:shopId/products', auth, async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ msg: 'Shop not found' });
+    }
+    const { name, description, price, inventory } = req.body;
+    const newProduct = new Product({
+      name,
+      description,
+      price,
+      inventory,
+      shop: req.params.shopId
+    });
+    const product = await newProduct.save();
+    res.json(product);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Update a product
+router.put('/:shopId/products/:productId', auth, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.productId);
+    if (!product) {
+      return res.status(404).json({ msg: 'Product not found' });
+    }
+    if (product.shop.toString() !== req.params.shopId) {
+      return res.status(400).json({ msg: 'Product does not belong to this shop' });
+    }
+    const { name, description, price, inventory } = req.body;
+    product.name = name;
+    product.description = description;
+    product.price = price;
+    product.inventory = inventory;
+    await product.save();
+    res.json(product);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Delete a product
+router.delete('/:shopId/products/:productId', auth, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.productId);
+    if (!product) {
+      return res.status(404).json({ msg: 'Product not found' });
+    }
+    if (product.shop.toString() !== req.params.shopId) {
+      return res.status(400).json({ msg: 'Product does not belong to this shop' });
+    }
+    await product.remove();
+    res.json({ msg: 'Product removed' });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');

@@ -1,8 +1,8 @@
 import React, { useContext } from 'react';
 import { AppBar, Toolbar, Typography, Button, IconButton, Box } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, Link } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { Home, Store, ShoppingCart, Person, ExitToApp } from '@mui/icons-material';
+import { Home, Store, ShoppingCart, Person, ExitToApp, Chat } from '@mui/icons-material';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
@@ -22,8 +22,11 @@ const Navbar = () => {
               <IconButton color="inherit" component={RouterLink} to="/store-setup">
                 <Store />
               </IconButton>
-              <IconButton color="inherit" component={RouterLink} to="/manage-products">
+              <IconButton color="inherit" component={RouterLink} to="/manage-shop">
                 <ShoppingCart />
+              </IconButton>
+              <IconButton color="inherit" component={RouterLink} to="/chat">
+                <Chat />
               </IconButton>
               <IconButton color="inherit" component={RouterLink} to="/profile">
                 <Person />
@@ -35,10 +38,10 @@ const Navbar = () => {
           )}
           {!user && (
             <>
-              <Button color="inherit" component={RouterLink} to="/login">
+              <Button color="inherit" component={Link} to="/login">
                 Login
               </Button>
-              <Button color="inherit" component={RouterLink} to="/register">
+              <Button color="inherit" component={Link} to="/register">
                 Register
               </Button>
             </>

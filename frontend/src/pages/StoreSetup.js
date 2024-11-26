@@ -1,127 +1,162 @@
-import React, { useState, useContext } from 'react';
-import { Container, Typography, TextField, Button, Box, Paper, Switch, FormControlLabel } from '@mui/material';
-import { AuthContext } from '../contexts/AuthContext';
+import React, { useState } from 'react';
+import { Container, Typography, TextField, Button, Stepper, Step, StepLabel, Box } from '@mui/material';
 import api from '../utils/api';
+import { useNavigate } from 'react-router-dom';
 
-const StoreSetup = () => {
-  const { user } = useContext(AuthContext);
-  const [formData, setFormData] = useState({
+const steps = ['Basic Information', 'Location', 'Visibility'];
+
+export default function StoreSetup() {
+  const [activeStep, setActiveStep] = useState(0);
+  const [storeData, setStoreData] = useState({
     name: '',
     description: '',
     address: '',
     latitude: '',
     longitude: '',
-    isPublic: true,
+    isPublic: true
   });
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
-    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    setFormData({ ...formData, [e.target.name]: value });
+    setStoreData({ ...storeData, [e.target.name]: e.target.value });
+  };
+
+  const handleNext = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep + 1);
+  };
+
+  const handleBack = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep - 1);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/api/shops', formData);
-      alert('Store created successfully');
-      setFormData({
-        name: '',
-        description: '',
-        address: '',
-        latitude: '',
-        longitude: '',
-        isPublic: true,
-      });
+      const response = await api.post('/shops', storeData);
+      console.log('Store created:', response.data);
+      navigate('/dashboard');
     } catch (error) {
       console.error('Error creating store:', error);
-      alert('Failed to create store');
+      setError('Failed to create store. Please try again.');
     }
   };
 
-  if (!user) {
-    return <Typography>Please log in to set up a store.</Typography>;
-  }
+  const getStepContent = (step) => {
+    switch (step) {
+      case 0:
+        return (
+          <>
+            <TextField
+              fullWidth
+              label="Store Name"
+              name="name"
+              value={storeData.name}
+              onChange={handleChange}
+              margin="normal"
+              required
+            />
+            <TextField
+              fullWidth
+              label="Description"
+              name="description"
+              value={storeData.description}
+              onChange={handleChange}
+              margin="normal"
+              multiline
+              rows={4}
+            />
+          </>
+        );
+      case 1:
+        return (
+          <>
+            <TextField
+              fullWidth
+              label="Address"
+              name="address"
+              value={storeData.address}
+              onChange={handleChange}
+              margin="normal"
+            />
+            <TextField
+              fullWidth
+              label="Latitude"
+              name="latitude"
+              value={storeData.latitude}
+              onChange={handleChange}
+              margin="normal"
+              type="number"
+            />
+            <TextField
+              fullWidth
+              label="Longitude"
+              name="longitude"
+              value={storeData.longitude}
+              onChange={handleChange}
+              margin="normal"
+              type="number"
+            />
+          </>
+        );
+      case 2:
+        return (
+          <TextField
+            select
+            fullWidth
+            label="Visibility"
+            name="isPublic"
+            value={storeData.isPublic}
+            onChange={handleChange}
+            margin="normal"
+            SelectProps={{
+              native: true,
+            }}
+          >
+            <option value={true}>Public</option>
+            <option value={false}>Private</option>
+          </TextField>
+        );
+      default:
+        return 'Unknown step';
+    }
+  };
 
   return (
     <Container maxWidth="sm">
-      <Paper elevation={3} sx={{ p: 4, mt: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Set Up Your Store
-        </Typography>
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-          <TextField
-            fullWidth
-            label="Store Name"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            margin="normal"
-            required
-          />
-          <TextField
-            fullWidth
-            label="Description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            margin="normal"
-            multiline
-            rows={4}
-            required
-          />
-          <TextField
-            fullWidth
-            label="Address"
-            name="address"
-            value={formData.address}
-            onChange={handleChange}
-            margin="normal"
-            required
-          />
-          <TextField
-            fullWidth
-            label="Latitude"
-            name="latitude"
-            type="number"
-            value={formData.latitude}
-            onChange={handleChange}
-            margin="normal"
-            required
-          />
-          <TextField
-            fullWidth
-            label="Longitude"
-            name="longitude"
-            type="number"
-            value={formData.longitude}
-            onChange={handleChange}
-            margin="normal"
-            required
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={formData.isPublic}
-                onChange={handleChange}
-                name="isPublic"
-                color="primary"
-              />
-            }
-            label="Public Store"
-          />
+      <Typography variant="h4" component="h1" gutterBottom>
+        Set Up Your Store
+      </Typography>
+      <Stepper activeStep={activeStep} alternativeLabel>
+        {steps.map((label) => (
+          <Step key={label}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
+      <form onSubmit={handleSubmit}>
+        {getStepContent(activeStep)}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
           <Button
-            type="submit"
+            disabled={activeStep === 0}
+            onClick={handleBack}
+          >
+            Back
+          </Button>
+          <Button
             variant="contained"
             color="primary"
-            fullWidth
-            sx={{ mt: 3 }}
+            onClick={activeStep === steps.length - 1 ? handleSubmit : handleNext}
           >
-            Create Store
+            {activeStep === steps.length - 1 ? 'Create Store' : 'Next'}
           </Button>
         </Box>
-      </Paper>
+      </form>
+      {error && (
+        <Typography color="error" sx={{ mt: 2 }}>
+          {error}
+        </Typography>
+      )}
     </Container>
   );
-};
-
-export default StoreSetup;
+}

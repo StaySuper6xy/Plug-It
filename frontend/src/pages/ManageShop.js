@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Container, Typography, Button, TextField, Grid, Card, CardContent, CardActions, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Container, Typography, Button, TextField, Card, CardContent, CardActions, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tabs, Tab, Box } from '@mui/material';
 import { AuthContext } from '../contexts/AuthContext';
 import api from '../utils/api';
 
@@ -12,35 +12,38 @@ const ManageShop = () => {
   const [isCreatingInvitation, setIsCreatingInvitation] = useState(false);
   const [invitationCode, setInvitationCode] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user && user.role === 'seller') {
+    if (user) {
       fetchShops();
     } else {
-      navigate('/');
+      navigate('/login');
     }
   }, [user, navigate]);
 
   const fetchShops = async () => {
     try {
-      const response = await api.get('/api/shops');
+      const response = await api.get('/shops');
       setShops(response.data);
+      if (response.data.length > 0) {
+        setSelectedShop(response.data[0]);
+      }
     } catch (error) {
       console.error('Error fetching shops:', error);
     }
   };
 
   const handleEditShop = (shop) => {
-    setSelectedShop(shop);
     setEditedShop(shop);
     setIsEditing(true);
   };
 
   const handleSaveEdit = async () => {
     try {
-      await api.put(`/api/shops/${selectedShop._id}`, editedShop);
+      await api.put(`/shops/${editedShop._id}`, editedShop);
       setIsEditing(false);
       fetchShops();
     } catch (error) {
@@ -50,7 +53,7 @@ const ManageShop = () => {
 
   const handleCreateInvitation = async (shopId) => {
     try {
-      const response = await api.post(`/api/shops/${shopId}/invitations`);
+      const response = await api.post(`/shops/${shopId}/invitations`);
       setInvitationCode(response.data.code);
       setIsCreatingInvitation(true);
     } catch (error) {
@@ -60,7 +63,7 @@ const ManageShop = () => {
 
   const handleDeleteShop = async () => {
     try {
-      await api.delete(`/api/shops/${selectedShop._id}`);
+      await api.delete(`/shops/${selectedShop._id}`);
       setIsDeleteDialogOpen(false);
       fetchShops();
     } catch (error) {
@@ -72,40 +75,51 @@ const ManageShop = () => {
     navigate(`/manage-products/${shopId}`);
   };
 
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+    setSelectedShop(shops[newValue]);
+  };
+
   return (
     <Container maxWidth="md">
       <Typography variant="h4" gutterBottom>
         Manage Your Shops
       </Typography>
-      <Grid container spacing={3}>
-        {shops.map((shop) => (
-          <Grid item xs={12} key={shop._id}>
-            <Card>
-              <CardContent>
-                <Typography variant="h5">{shop.name}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {shop.description}
-                </Typography>
-                <Typography variant="body2">
-                  Address: {shop.address || 'No physical address'}
-                </Typography>
-                <Typography variant="body2">
-                  Type: {shop.isPublic ? 'Public' : 'Private'}
-                </Typography>
-              </CardContent>
-              <CardActions>
-                <Button size="small" onClick={() => handleEditShop(shop)}>Edit</Button>
-                <Button size="small" onClick={() => handleCreateInvitation(shop._id)}>Create Invitation</Button>
-                <Button size="small" onClick={() => handleManageProducts(shop._id)}>Manage Products</Button>
-                <Button size="small" color="error" onClick={() => {
-                  setSelectedShop(shop);
-                  setIsDeleteDialogOpen(true);
-                }}>Delete</Button>
-              </CardActions>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+      {shops.length > 0 ? (
+        <>
+          <Tabs value={activeTab} onChange={handleTabChange} aria-label="shop tabs">
+            {shops.map((shop, index) => (
+              <Tab label={shop.name} key={shop._id} />
+            ))}
+          </Tabs>
+          <Box mt={3}>
+            {selectedShop && (
+              <Card>
+                <CardContent>
+                  <Typography variant="h5">{selectedShop.name}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {selectedShop.description}
+                  </Typography>
+                  <Typography variant="body2">
+                    Address: {selectedShop.address || 'No physical address'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Type: {selectedShop.isPublic ? 'Public' : 'Private'}
+                  </Typography>
+                </CardContent>
+                <CardActions>
+                  <Button size="small" onClick={() => handleEditShop(selectedShop)}>Edit</Button>
+                  <Button size="small" onClick={() => handleCreateInvitation(selectedShop._id)}>Create Invitation</Button>
+                  <Button size="small" onClick={() => handleManageProducts(selectedShop._id)}>Manage Products</Button>
+                  <Button size="small" color="error" onClick={() => setIsDeleteDialogOpen(true)}>Delete</Button>
+                </CardActions>
+              </Card>
+            )}
+          </Box>
+        </>
+      ) : (
+        <Typography variant="body1">You don't have any shops yet. Create one to get started!</Typography>
+      )}
 
       {/* Edit Shop Dialog */}
       <Dialog open={isEditing} onClose={() => setIsEditing(false)}>
