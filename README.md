@@ -36,11 +36,12 @@ Before you begin, ensure you have the following installed:
    JWT_SECRET=your_jwt_secret
    REFRESH_TOKEN_SECRET=your_refresh_token_secret
    PORT=5000
+   ENCRYPTION_SECRET=your_encryption_secret
    ```
 
    Replace `your_mongodb_connection_string` with your MongoDB connection string.
 
-4. Generate secret tokens for JWT_SECRET and REFRESH_TOKEN_SECRET:
+4. Generate secret tokens for JWT_SECRET, REFRESH_TOKEN_SECRET, and ENCRYPTION_SECRET:
    - You can use the following command in your terminal to generate random strings:
      ```
      node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
