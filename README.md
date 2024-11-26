@@ -46,7 +46,7 @@ Before you begin, ensure you have the following installed:
      ```
      node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
      ```
-   - Run this command twice to generate two different secrets for JWT_SECRET and REFRESH_TOKEN_SECRET.
+   - Run this command three times to generate three different secrets for JWT_SECRET, REFRESH_TOKEN_SECRET, and ENCRYPTION_SECRET.
 
 5. Start the backend server:
    ```
@@ -72,7 +72,7 @@ Before you begin, ensure you have the following installed:
 
 ## Running the Application
 
-1. Ensure MongoDB is running on your system.
+1. Ensure MongoDB is running on your system or that your MONGODB_URI is in your .env file.
 2. Start the backend server (from the backend directory):
    ```
    npm start
