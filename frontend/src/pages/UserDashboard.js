@@ -2,23 +2,23 @@ import React, { useEffect, useContext, useState, useCallback } from 'react';
 import { Typography, Container, Box, CircularProgress, Button, Card, CardContent, Grid } from '@mui/material';
 import { Store, Public, Lock } from '@mui/icons-material';
 import { AuthContext } from '../contexts/AuthContext';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+// import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+// import 'leaflet/dist/leaflet.css';
+// import L from 'leaflet';
 import api from '../utils/api';
 import { useNavigate, Link } from 'react-router-dom';
 
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
-  iconUrl: require('leaflet/dist/images/marker-icon.png'),
-  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
-});
+// delete L.Icon.Default.prototype._getIconUrl;
+// L.Icon.Default.mergeOptions({
+//   iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+//   iconUrl: require('leaflet/dist/images/marker-icon.png'),
+//   shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+// });
 
 const UserDashboard = () => {
-  const { user, loading, logout } = useContext(AuthContext);
+  const { user, loading } = useContext(AuthContext);
   const [shops, setShops] = useState([]);
-  const [mapCenter, setMapCenter] = useState([51.505, -0.09]);
+  // const [mapCenter, setMapCenter] = useState([51.505, -0.09]);
   const [filter, setFilter] = useState('all');
   const [selectedShop, setSelectedShop] = useState(null);
   const [fetchError, setFetchError] = useState(null);
@@ -30,9 +30,9 @@ const UserDashboard = () => {
       const response = await api.get('/shops');
       console.log('Fetched shops:', response.data);
       setShops(response.data);
-      if (response.data.length > 0) {
-        setMapCenter([response.data[0].latitude || 51.505, response.data[0].longitude || -0.09]);
-      }
+      // if (response.data.length > 0) {
+      //   setMapCenter([response.data[0].latitude || 51.505, response.data[0].longitude || -0.09]);
+      // }
     } catch (error) {
       console.error('Error fetching shops:', error);
       setFetchError('Unable to fetch shops. Please try again later.');
@@ -74,15 +74,15 @@ const UserDashboard = () => {
 
   const handleShopClick = (shop) => {
     setSelectedShop(shop);
-    setMapCenter([shop.latitude || 51.505, shop.longitude || -0.09]);
+    // setMapCenter([shop.latitude || 51.505, shop.longitude || -0.09]);
   };
-
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Typography variant="h4" gutterBottom sx={{ color: 'white', mb: 3 }}>
         Welcome, {user.username}!
       </Typography>
+      {/* Commented out map feature
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ height: '400px', width: '100%' }}>
@@ -108,6 +108,7 @@ const UserDashboard = () => {
           </Box>
         </CardContent>
       </Card>
+      */}
       <Box sx={{ mb: 3 }}>
         <Button 
           onClick={() => setFilter('all')} 

@@ -3,8 +3,12 @@ const express = require('express');
 const connectDB = require('./config/db');
 const cors = require('cors');
 const crypto = require('crypto');
+const path = require('path');
 
 const app = express();
+
+// Photo Reference
+app.use(express.static('public'));
 
 // Generate a consistent encryption key
 const ENCRYPTION_KEY = crypto.scryptSync(process.env.ENCRYPTION_SECRET || 'default-secret', 'salt', 32);
@@ -13,9 +17,27 @@ global.ENCRYPTION_KEY = ENCRYPTION_KEY;
 // Connect Database
 connectDB();
 
+// CORS configuration
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  optionsSuccessStatus: 200
+};
+
 // Init Middleware
-app.use(express.json({ extended: false }));
-app.use(cors());
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Serve static files from the public/uploads directory
+const uploadsPath = path.join(__dirname, 'public', 'uploads');
+console.log('Serving static files from:', uploadsPath);
+app.use('/public/uploads', express.static(uploadsPath));
+
+// Logging middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
 
 // Define Routes
 app.use('/api/users', require('./routes/users'));
@@ -32,11 +54,12 @@ app.listen(PORT, () => {
   console.log('MongoDB URI:', process.env.MONGODB_URI ? '[REDACTED]' : 'Not set');
   console.log('JWT Secret:', process.env.JWT_SECRET ? '[REDACTED]' : 'Not set');
   console.log('Encryption Key:', ENCRYPTION_KEY ? '[GENERATED]' : 'Not set');
+  console.log('Frontend URL:', process.env.FRONTEND_URL || 'http://localhost:3000');
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Global error handler:', err.stack);
   res.status(500).send('Something went wrong!');
 });
 

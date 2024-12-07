@@ -1,147 +1,180 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
-const { check, validationResult } = require('express-validator');
-
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 const Product = require('../models/Product');
 const Shop = require('../models/Shop');
+const auth = require('../middleware/auth');
+const rateLimit = require('express-rate-limit');
 
-// @route   POST api/products
-// @desc    Create a product
-// @access  Private
-router.post('/', [auth, [
-  check('name', 'Name is required').not().isEmpty(),
-  check('description', 'Description is required').not().isEmpty(),
-  check('price', 'Price is required and must be a number').isNumeric(),
-  check('shop', 'Shop is required').not().isEmpty()
-]], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
+const fileUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
+});
 
-  try {
-    const { name, description, price, shop } = req.body;
+// Apply rate limiting to file uploads
+router.use(fileUploadLimiter);
 
-    // Check if the shop exists and belongs to the user
-    const shopDoc = await Shop.findOne({ _id: shop, owner: req.user.id });
-    if (!shopDoc) {
-      return res.status(404).json({ msg: 'Shop not found or you do not have permission' });
+// Configure multer for file upload
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const shopId = req.params.shopId;
+    const uploadPath = path.join(__dirname, '../public/uploads', shopId);
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
     }
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + crypto.randomBytes(6).toString('hex');
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+// Implement file type and size restrictions
+const upload = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    // Allow only specific file types
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Not an image! Please upload only images.'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB file size limit
+  }
+});
+
+// Get all products for a shop
+router.get('/:shopId/products', async (req, res) => {
+  try {
+    const products = await Product.find({ shop: req.params.shopId });
+    res.json(products);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Create a new product
+router.post('/:shopId/products', auth, upload.array('images', 5), async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ msg: 'Shop not found' });
+    }
+
+    if (shop.owner.toString() !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    const { name, description, prices, inventory, inventoryUnit, customInventoryUnit } = req.body;
 
     const newProduct = new Product({
       name,
       description,
-      price,
-      shop
+      prices: JSON.parse(prices),
+      inventory,
+      inventoryUnit,
+      customInventoryUnit,
+      shop: req.params.shopId,
+      images: req.files.map(file => `${req.params.shopId}/${file.filename}`)
     });
 
     const product = await newProduct.save();
-
     res.json(product);
   } catch (err) {
-    console.error(err.message);
+    console.error(err);
     res.status(500).send('Server Error');
   }
 });
 
-// @route   GET api/products
-// @desc    Get all products
-// @access  Public
-router.get('/', async (req, res) => {
+// Update a product
+router.put('/:shopId/products/:id', auth, upload.array('images', 5), async (req, res) => {
   try {
-    const products = await Product.find().populate('shop', ['name', 'address']);
-    res.json(products);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// @route   GET api/products/:id
-// @desc    Get product by ID
-// @access  Public
-router.get('/:id', async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id).populate('shop', ['name', 'address']);
-    
-    if (!product) {
-      return res.status(404).json({ msg: 'Product not found' });
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ msg: 'Shop not found' });
     }
 
-    res.json(product);
-  } catch (err) {
-    console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Product not found' });
+    if (shop.owner.toString() !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
     }
-    res.status(500).send('Server Error');
-  }
-});
 
-// @route   PUT api/products/:id
-// @desc    Update a product
-// @access  Private
-router.put('/:id', auth, async (req, res) => {
-  const { name, description, price } = req.body;
-
-  // Build product object
-  const productFields = {};
-  if (name) productFields.name = name;
-  if (description) productFields.description = description;
-  if (price) productFields.price = price;
-
-  try {
     let product = await Product.findById(req.params.id);
-
     if (!product) {
       return res.status(404).json({ msg: 'Product not found' });
     }
 
-    // Make sure user owns the shop that the product belongs to
-    const shop = await Shop.findById(product.shop);
-    if (shop.owner.toString() !== req.user.id) {
-      return res.status(401).json({ msg: 'User not authorized' });
-    }
+    const { name, description, prices, inventory, inventoryUnit, customInventoryUnit, imagesToKeep } = req.body;
 
-    product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { $set: productFields },
-      { new: true }
-    );
+    product.name = name;
+    product.description = description;
+    product.prices = JSON.parse(prices);
+    product.inventory = inventory;
+    product.inventoryUnit = inventoryUnit;
+    product.customInventoryUnit = customInventoryUnit;
 
+    const imagesToKeepArray = imagesToKeep ? (Array.isArray(imagesToKeep) ? imagesToKeep : [imagesToKeep]) : [];
+    const newImages = req.files.map(file => `${req.params.shopId}/${file.filename}`);
+    
+    // Combine existing images to keep with new uploaded images
+    product.images = [
+      ...imagesToKeepArray,
+      ...newImages
+    ];
+
+    // Remove old images that are not in imagesToKeepArray
+    const uploadPath = path.join(__dirname, '../public/uploads', req.params.shopId);
+    const currentImages = fs.readdirSync(uploadPath);
+    currentImages.forEach(image => {
+      if (!imagesToKeepArray.includes(image) && !newImages.includes(`${req.params.shopId}/${image}`)) {
+        fs.unlink(path.join(uploadPath, image), (err) => {
+          if (err) console.error('Error deleting image:', err);
+        });
+      }
+    });
+
+    await product.save();
     res.json(product);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    console.error('Error updating product:', err);
+    res.status(500).json({ msg: 'Server Error', error: err.message });
   }
 });
 
-// @route   DELETE api/products/:id
-// @desc    Delete a product
-// @access  Private
-router.delete('/:id', auth, async (req, res) => {
+// Delete a product
+router.delete('/:shopId/products/:id', auth, async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ msg: 'Shop not found' });
+    }
 
+    if (shop.owner.toString() !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    const product = await Product.findById(req.params.id);
     if (!product) {
       return res.status(404).json({ msg: 'Product not found' });
     }
 
-    // Make sure user owns the shop that the product belongs to
-    const shop = await Shop.findById(product.shop);
-    if (shop.owner.toString() !== req.user.id) {
-      return res.status(401).json({ msg: 'User not authorized' });
-    }
+    const uploadPath = path.join(__dirname, '../public/uploads', req.params.shopId);
+    product.images.forEach(image => {
+      fs.unlink(path.join(uploadPath, path.basename(image)), (err) => {
+        if (err) console.error('Error deleting image:', err);
+      });
+    });
 
     await product.remove();
-
     res.json({ msg: 'Product removed' });
   } catch (err) {
-    console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Product not found' });
-    }
+    console.error(err);
     res.status(500).send('Server Error');
   }
 });

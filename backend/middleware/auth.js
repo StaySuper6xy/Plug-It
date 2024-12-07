@@ -4,22 +4,24 @@ module.exports = function(req, res, next) {
   // Get token from header
   const token = req.header('Authorization')?.split(' ')[1];
 
-  console.log('Received token:', token); // Add this line
+  console.log('Received Authorization header:', req.header('Authorization'));
+  console.log('Extracted token:', token);
 
   // Check if no token
   if (!token) {
-    console.log('No token provided'); // Add this line
-    return res.status(401).json({ msg: 'No token, authorization denied' });
+    console.log('No token provided');
+    return res.status(401).json({ message: 'No token, authorization denied' });
   }
 
-  // Verify token
   try {
+    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded.user;
-    console.log('Token verified, user:', req.user); // Add this line
+    console.log('Token verified successfully');
+    console.log('Decoded user:', req.user);
     next();
   } catch (err) {
-    console.error('Token verification failed:', err); // Add this line
-    res.status(401).json({ msg: 'Token is not valid' });
+    console.error('Token verification failed:', err);
+    res.status(401).json({ message: 'Token is not valid' });
   }
 };

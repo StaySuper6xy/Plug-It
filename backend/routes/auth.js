@@ -2,40 +2,35 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { check, validationResult } = require('express-validator');
-const User = require('../models/User');
 const auth = require('../middleware/auth');
+const User = require('../models/User');
 
-// @route   POST api/auth/register
-// @desc    Register user
-// @access  Public
-router.post('/register', [
-  check('username', 'Username is required').not().isEmpty(),
-  check('email', 'Please include a valid email').isEmail(),
-  check('password', 'Please enter a password with 6 or more characters').isLength({ min: 6 })
-], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
-  const { username, email, password } = req.body;
-
+// Register a new user
+router.post('/register', async (req, res) => {
   try {
-    let user = await User.findOne({ email });
+    const { name, email, password } = req.body;
 
+    // Check if user already exists
+    let user = await User.findOne({ email });
     if (user) {
-      return res.status(400).json({ msg: 'User already exists' });
+      return res.status(400).json({ message: 'User already exists' });
     }
 
+    // Create new user
     user = new User({
-      username,
+      name,
       email,
       password
     });
 
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+
+    // Save user to database
     await user.save();
 
+    // Create and return JWT token
     const payload = {
       user: {
         id: user.id
@@ -45,52 +40,53 @@ router.post('/register', [
     jwt.sign(
       payload,
       process.env.JWT_SECRET,
-      { expiresIn: '5h' },
+      { expiresIn: '24h' },
       (err, token) => {
         if (err) throw err;
-        res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+        res.json({
+          token: `Bearer ${token}`,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email
+          }
+        });
       }
     );
   } catch (err) {
     console.error('Registration error:', err.message);
-    res.status(500).send('Server error');
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
-// @route   POST api/auth/login
-// @desc    Authenticate user & get token
-// @access  Public
-router.post('/login', [
-  check('email', 'Please include a valid email').isEmail(),
-  check('password', 'Password is required').exists()
-], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
-  const { email, password } = req.body;
-
+// Login user
+router.post('/login', async (req, res) => {
+  console.log('Login attempt received');
+  
   try {
-    let user = await User.findOne({ email });
+    const { email, password } = req.body;
 
+    // Validate input
+    if (!email || !password) {
+      console.log('Missing email or password');
+      return res.status(400).json({ message: 'Please enter all fields' });
+    }
+
+    // Check for existing user
+    const user = await User.findOne({ email });
     if (!user) {
       console.log('User not found:', email);
-      return res.status(400).json({ msg: 'Invalid Credentials' });
+      return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    console.log('User found:', user.email);
-    console.log('Stored hashed password:', user.password);
-
-    const isMatch = await user.comparePassword(password);
-
-    console.log('Password match result:', isMatch);
-
+    // Validate password
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      console.log('Password mismatch for user:', email);
-      return res.status(400).json({ msg: 'Invalid Credentials' });
+      console.log('Invalid password for user:', email);
+      return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+    // Create and sign JWT token
     const payload = {
       user: {
         id: user.id
@@ -100,44 +96,37 @@ router.post('/login', [
     jwt.sign(
       payload,
       process.env.JWT_SECRET,
-      { expiresIn: '5h' },
+      { expiresIn: '24h' },
       (err, token) => {
-        if (err) throw err;
-        res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+        if (err) {
+          console.error('Error signing JWT:', err);
+          throw err;
+        }
+        console.log('Login successful for user:', email);
+        res.json({
+          token: `Bearer ${token}`,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email
+          }
+        });
       }
     );
   } catch (err) {
-    console.error('Login error:', err.message);
-    res.status(500).send('Server error');
+    console.error('Server error during login:', err);
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
-// @route   GET api/auth/user
-// @desc    Get user data
-// @access  Private
+// Get user data
 router.get('/user', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
     res.json(user);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// @route   GET api/auth/check-password/:email
-// @desc    Check user's password hash (for debugging purposes only)
-// @access  Public (should be restricted in production)
-router.get('/check-password/:email', async (req, res) => {
-  try {
-    const user = await User.findOne({ email: req.params.email });
-    if (!user) {
-      return res.status(404).json({ msg: 'User not found' });
-    }
-    res.json({ passwordHash: user.password });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    console.error('Error fetching user data:', err);
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
