@@ -113,7 +113,6 @@ export default function ManageProducts() {
             if (image instanceof File) {
               formData.append(`images`, image);
             } else {
-              // Only append the filename for existing images
               formData.append(`imagesToKeep`, image.split('/').pop());
             }
           });
@@ -175,7 +174,6 @@ export default function ManageProducts() {
     if (image instanceof File) {
       return URL.createObjectURL(image);
     } else {
-      // Ensure we're using the correct path to the uploads folder
       return `${process.env.REACT_APP_UPLOADS_URL}/${image}`;
     }
   };
@@ -347,5 +345,3 @@ export default function ManageProducts() {
     </Container>
   );
 }
-
-
