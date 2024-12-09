@@ -189,64 +189,41 @@ router.post('/:shopId/products', auth, upload.array('images', 5), async (req, re
 });
 
 // Update a product
-router.put('/:shopId/products/:productId', auth, upload.array('images', 5), async (req, res) => {
-  console.log('Updating product');
+router.put('/:shopId/products/:productId', auth, upload.array('images'), async (req, res) => {
   try {
-    const shop = await Shop.findById(req.params.shopId);
-    if (!shop) {
-      console.log('Shop not found');
-      return res.status(404).json({ message: 'Shop not found' });
-    }
-
-    if (shop.owner.toString() !== req.user.id) {
-      console.log('User not authorized');
-      return res.status(403).json({ message: 'User not authorized' });
-    }
-
-    let product = await Product.findById(req.params.productId);
+    const product = await Product.findById(req.params.productId);
     if (!product) {
-      console.log('Product not found');
-      return res.status(404).json({ message: 'Product not found' });
+      return res.status(404).json({ msg: 'Product not found' });
+    }
+    if (product.shop.toString() !== req.params.shopId) {
+      return res.status(400).json({ msg: 'Product does not belong to this shop' });
     }
 
-    console.log('Existing product images:', product.images);
-    console.log('New files received:', req.files);
-
-    // Handle image removals
-    const imagesToKeep = JSON.parse(req.body.imagesToKeep || '[]');
-    console.log('Images to keep:', imagesToKeep);
-
-    const imagesToRemove = product.images.filter(img => !imagesToKeep.includes(img));
-    console.log('Images to remove:', imagesToRemove);
-
-    for (const imageToRemove of imagesToRemove) {
-      const fullPath = path.join(__dirname, '../..', imageToRemove);
-      try {
-        await fs.unlink(fullPath);
-        console.log(`Successfully deleted: ${fullPath}`);
-      } catch (err) {
-        console.error(`Error deleting image: ${fullPath}`, err);
-      }
+    const { name, description, inventory, inventoryUnit, customInventoryUnit, prices } = req.body;
+    
+    product.name = name;
+    product.description = description;
+    product.inventory = inventory;
+    product.inventoryUnit = inventoryUnit;
+    product.customInventoryUnit = customInventoryUnit;
+    
+    // Parse the prices JSON string
+    if (prices) {
+      product.prices = JSON.parse(prices);
     }
 
-    product.name = req.body.name;
-    product.description = req.body.description;
-    product.prices = JSON.parse(req.body.prices);
-    product.inventory = req.body.inventory;
-    product.inventoryUnit = req.body.inventoryUnit;
-    product.customInventoryUnit = req.body.customInventoryUnit;
+    // Handle image updates
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map(file => `/uploads/${file.filename}`);
+      product.images = [...(req.body.imagesToKeep ? req.body.imagesToKeep.split(',') : []), ...newImages];
+    } else if (req.body.imagesToKeep) {
+      product.images = req.body.imagesToKeep.split(',');
+    }
 
-    product.images = [
-      ...imagesToKeep,
-      ...req.files.map(file => `${file.filename}`) // Change: removed `uploads/` prefix
-    ];
-
-    console.log('Updated product data:', product);
-    product = await product.save();
-    console.log('Product updated successfully:', product);
+    await product.save();
     res.json(product);
   } catch (err) {
-    console.error('Error updating product:', err.message);
+    console.error(err.message);
     res.status(500).send('Server Error');
   }
 });

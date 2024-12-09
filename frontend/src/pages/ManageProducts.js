@@ -107,13 +107,15 @@ export default function ManageProducts() {
       const formData = new FormData();
       Object.keys(productForm).forEach(key => {
         if (key === 'prices') {
+          // Stringify the prices array properly
           formData.append(key, JSON.stringify(productForm[key]));
         } else if (key === 'images') {
+          // Handle images separately
           productForm[key].forEach((image, index) => {
             if (image instanceof File) {
               formData.append(`images`, image);
             } else {
-              formData.append(`imagesToKeep`, image.split('/').pop());
+              formData.append(`imagesToKeep`, image);
             }
           });
         } else {
@@ -121,30 +123,12 @@ export default function ManageProducts() {
         }
       });
 
-      console.log('Submitting product form:', Object.fromEntries(formData));
-
-      let response;
       if (editingProduct) {
-        console.log('Updating product:', editingProduct._id);
-        response = await api.put(`/shops/${shopId}/products/${editingProduct._id}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await api.put(`/shops/${shopId}/products/${editingProduct._id}`, formData);
       } else {
-        console.log('Creating new product');
-        response = await api.post(`/shops/${shopId}/products`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await api.post(`/shops/${shopId}/products`, formData);
       }
-      console.log('API response:', response.data);
-      
-      setProducts(prevProducts => {
-        if (editingProduct) {
-          return prevProducts.map(p => p._id === response.data._id ? response.data : p);
-        } else {
-          return [...prevProducts, response.data];
-        }
-      });
-
+      fetchProducts();
       handleClose();
     } catch (error) {
       console.error('Error saving product:', error);
