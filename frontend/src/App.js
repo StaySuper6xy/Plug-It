@@ -35,8 +35,8 @@ function App() {
             <Route path="/dashboard" element={<UserDashboard />} />
             <Route path="/profile" element={<UserProfile />} />
             <Route path="/store-setup" element={<StoreSetup />} />
-            <Route path="/manage-shop" element={<ManageShop />} />
-            <Route path="/shop/:id" element={<ShopPage />} />
+            <Route path="/manage-shop/:shopId" element={<ManageShop />} />
+            <Route path="/shop/:shopId" element={<ShopPage />} />
             <Route path="/manage-products/:shopId" element={<ManageProducts />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:partnerId" element={<Chat />} />
