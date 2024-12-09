@@ -32,6 +32,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const uploadsPath = path.join(__dirname, 'public', 'uploads');
 console.log('Serving static files from:', uploadsPath);
 app.use('/public/uploads', express.static(uploadsPath));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+
 
 // Logging middleware
 app.use((req, res, next) => {

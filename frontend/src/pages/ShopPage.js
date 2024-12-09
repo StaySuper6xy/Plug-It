@@ -1,36 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Typography, Grid, Card, CardContent, CardMedia, Button, CircularProgress } from '@mui/material';
+import { useParams } from 'react-router-dom';
+import { 
+  Container, 
+  Typography, 
+  Grid, 
+  Card, 
+  CardContent, 
+  CardMedia, 
+  Button,
+  Box
+} from '@mui/material';
 import api from '../utils/api';
 
 export default function ShopPage() {
   const { shopId } = useParams();
-  const navigate = useNavigate();
   const [shop, setShop] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchShopAndProducts = async () => {
-      if (!shopId) {
-        setError('Shop ID is missing');
-        setLoading(false);
-        return;
-      }
-
       try {
         const [shopResponse, productsResponse] = await Promise.all([
           api.get(`/shops/${shopId}`),
           api.get(`/shops/${shopId}/products`)
         ]);
-
         setShop(shopResponse.data);
         setProducts(productsResponse.data);
-        setLoading(false);
       } catch (error) {
         console.error('Error fetching shop and products:', error);
-        setError('Failed to load shop data');
+      } finally {
         setLoading(false);
       }
     };
@@ -39,81 +38,106 @@ export default function ShopPage() {
   }, [shopId]);
 
   const getLowestPrice = (prices) => {
-    if (!prices || prices.length === 0) return 'N/A';
+    if (!prices || prices.length === 0) return null;
     const lowestPrice = Math.min(...prices.map(p => p.price));
-    return `$${lowestPrice.toFixed(2)}`;
+    return lowestPrice.toFixed(2);
   };
 
-  if (loading) {
+  if (loading || !shop) {
     return (
-      <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress />
-      </Container>
-    );
-  }
-
-  if (error) {
-    return (
-      <Container>
-        <Typography variant="h5" color="error" gutterBottom>
-          {error}
-        </Typography>
-        <Button variant="contained" onClick={() => navigate('/dashboard')}>
-          Back to Dashboard
-        </Button>
-      </Container>
-    );
-  }
-
-  if (!shop) {
-    return (
-      <Container>
-        <Typography variant="h5" gutterBottom>
-          Shop not found
-        </Typography>
-        <Button variant="contained" onClick={() => navigate('/dashboard')}>
-          Back to Dashboard
-        </Button>
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Typography>Loading...</Typography>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg">
-      <Typography variant="h2" gutterBottom>
-        {shop.name}
-      </Typography>
-      <Typography variant="body1" paragraph>
-        {shop.description}
-      </Typography>
-      <Grid container spacing={4}>
-        {products.map((product) => (
-          <Grid item key={product._id} xs={12} sm={6} md={4}>
-            <Card>
-              <CardMedia
-                component="img"
-                height="140"
-                image={product.images && product.images.length > 0 ? product.images[0] : '/placeholder.svg'}
-                alt={product.name}
-              />
-              <CardContent>
-                <Typography gutterBottom variant="h5" component="div">
-                  {product.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {product.description}
-                </Typography>
-                <Typography variant="h6" color="primary" sx={{ mt: 2 }}>
-                  From: {getLowestPrice(product.prices)}
-                </Typography>
-                <Button variant="contained" color="primary" sx={{ mt: 2 }}>
-                  View Details
-                </Button>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-    </Container>
+    <Box sx={{ 
+      minHeight: '100vh',
+      bgcolor: 'background.default',
+      pt: 4,
+      pb: 8
+    }}>
+      <Container maxWidth="lg">
+        <Typography variant="h2" gutterBottom sx={{ 
+          fontSize: { xs: '2.5rem', md: '3.75rem' },
+          fontWeight: 500,
+          color: 'text.primary',
+          mb: 2
+        }}>
+          {shop.name}
+        </Typography>
+        
+        <Typography variant="body1" sx={{ 
+          color: 'text.secondary',
+          mb: 6
+        }}>
+          {shop.description}
+        </Typography>
+
+        <Grid container spacing={3}>
+          {products.map((product) => (
+            <Grid item xs={12} sm={6} md={3} key={product._id}>
+              <Card sx={{ 
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                bgcolor: 'background.paper',
+                borderRadius: 2,
+                overflow: 'hidden',
+                transition: 'transform 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)'
+                }
+              }}>
+                <CardMedia
+                  component="img"
+                  sx={{
+                    height: 240,
+                    objectFit: 'cover',
+                  }}
+                  image={product.images && product.images.length > 0 
+                    ? `${process.env.REACT_APP_UPLOADS_URL}/${product.images[0]}` 
+                    : '/placeholder.svg'}
+                  alt={product.name}
+                />
+                <CardContent sx={{ flexGrow: 1, p: 2 }}>
+                  <Typography gutterBottom variant="h6" component="h2" sx={{
+                    fontSize: '1.1rem',
+                    fontWeight: 500,
+                    mb: 1
+                  }}>
+                    {product.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {product.description}
+                  </Typography>
+                  <Typography variant="h6" sx={{ 
+                    fontWeight: 600,
+                    color: 'text.primary'
+                  }}>
+                    From: ${getLowestPrice(product.prices)}
+                  </Typography>
+                  <Button 
+                    variant="contained" 
+                    fullWidth 
+                    sx={{ 
+                      mt: 2,
+                      bgcolor: 'primary.main',
+                      color: 'primary.contrastText',
+                      '&:hover': {
+                        bgcolor: 'primary.dark',
+                      }
+                    }}
+                  >
+                    VIEW DETAILS
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Container>
+    </Box>
   );
 }
