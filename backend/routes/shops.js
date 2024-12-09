@@ -10,7 +10,7 @@ const fs = require('fs').promises;
 // Set up multer for handling file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const dir = path.join(__dirname, '../../uploads');
+    const dir = path.join(__dirname, '../public/uploads');
     fs.mkdir(dir, { recursive: true })
       .then(() => {
         console.log(`Upload directory created/verified: ${dir}`);
@@ -174,7 +174,7 @@ router.post('/:shopId/products', auth, upload.array('images', 5), async (req, re
       inventory: req.body.inventory,
       inventoryUnit: req.body.inventoryUnit,
       customInventoryUnit: req.body.customInventoryUnit,
-      images: req.files.map(file => `uploads/${file.filename}`), // Remove leading slash
+      images: req.files.map(file => `${file.filename}`), // Change: removed `uploads/` prefix
       shop: req.params.shopId
     });
 
@@ -238,7 +238,7 @@ router.put('/:shopId/products/:productId', auth, upload.array('images', 5), asyn
 
     product.images = [
       ...imagesToKeep,
-      ...req.files.map(file => `uploads/${file.filename}`) // Remove leading slash
+      ...req.files.map(file => `${file.filename}`) // Change: removed `uploads/` prefix
     ];
 
     console.log('Updated product data:', product);

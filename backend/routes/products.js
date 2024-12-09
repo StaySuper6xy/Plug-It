@@ -82,7 +82,7 @@ router.post('/:shopId/products', auth, upload.array('images', 5), async (req, re
       inventoryUnit,
       customInventoryUnit,
       shop: req.params.shopId,
-      images: req.files.map(file => `${req.params.shopId}/${file.filename}`)
+      images: req.files.map(file => `${file.filename}`) // Change: removed `uploads/` prefix
     });
 
     const product = await newProduct.save();
@@ -120,7 +120,7 @@ router.put('/:shopId/products/:id', auth, upload.array('images', 5), async (req,
     product.customInventoryUnit = customInventoryUnit;
 
     const imagesToKeepArray = imagesToKeep ? (Array.isArray(imagesToKeep) ? imagesToKeep : [imagesToKeep]) : [];
-    const newImages = req.files.map(file => `${req.params.shopId}/${file.filename}`);
+    const newImages = req.files.map(file => `${file.filename}`); // Change: removed `uploads/` prefix
     
     // Combine existing images to keep with new uploaded images
     product.images = [
