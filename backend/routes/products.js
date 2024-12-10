@@ -82,7 +82,7 @@ router.post('/:shopId/products', auth, upload.array('images', 5), async (req, re
       inventoryUnit,
       customInventoryUnit,
       shop: req.params.shopId,
-      images: req.files.map(file => `${file.filename}`) // Change: removed `uploads/` prefix
+      images: req.files.map(file => `${file.filename}`)
     });
 
     const product = await newProduct.save();
@@ -120,7 +120,7 @@ router.put('/:shopId/products/:id', auth, upload.array('images', 5), async (req,
     product.customInventoryUnit = customInventoryUnit;
 
     const imagesToKeepArray = imagesToKeep ? (Array.isArray(imagesToKeep) ? imagesToKeep : [imagesToKeep]) : [];
-    const newImages = req.files.map(file => `${file.filename}`); // Change: removed `uploads/` prefix
+    const newImages = req.files.map(file => `${file.filename}`);
     
     // Combine existing images to keep with new uploaded images
     product.images = [
@@ -175,6 +175,40 @@ router.delete('/:shopId/products/:id', auth, async (req, res) => {
     res.json({ msg: 'Product removed' });
   } catch (err) {
     console.error(err);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Get a single product by ID
+router.get('/products/:id', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ msg: 'Product not found' });
+    }
+    res.json(product);
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Product not found' });
+    }
+    res.status(500).send('Server Error');
+  }
+});
+
+// Update this route to match the frontend request
+router.get('/:id', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ msg: 'Product not found' });
+    }
+    res.json(product);
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Product not found' });
+    }
     res.status(500).send('Server Error');
   }
 });

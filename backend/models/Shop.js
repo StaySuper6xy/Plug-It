@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const ShopSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   description: {
     type: String,
@@ -11,15 +12,18 @@ const ShopSchema = new mongoose.Schema({
   },
   address: {
     type: String,
-    required: false
+    default: ''
   },
-  latitude: {
-    type: Number,
-    required: false
-  },
-  longitude: {
-    type: Number,
-    required: false
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      default: [0, 0]
+    }
   },
   isPublic: {
     type: Boolean,
@@ -30,10 +34,20 @@ const ShopSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  date: {
+  products: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product'
+  }],
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }
-});
+}, { timestamps: true });
+
+ShopSchema.index({ location: '2dsphere' });
 
 module.exports = mongoose.model('Shop', ShopSchema);
