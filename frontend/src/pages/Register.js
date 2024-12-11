@@ -31,13 +31,23 @@ function Register() {
       return;
     }
 
+    // Debug log
+    console.log('Sending registration data:', {
+      username: formData.username,
+      email: formData.email,
+      password: formData.password,
+    });
+
     try {
-      const response = await api.post('/api/auth/register', {
+      const response = await api.post('/auth/register', {
         username: formData.username,
         email: formData.email,
         password: formData.password,
       });
       
+      // Debug log
+      console.log('Registration response:', response.data);
+
       if (response.data && response.data.token) {
         login(response.data.token, response.data.user);
         navigate('/dashboard');
@@ -47,6 +57,7 @@ function Register() {
     } catch (error) {
       console.error('Registration error:', error);
       if (error.response) {
+        console.error('Error response:', error.response.data);
         setError(error.response.data.msg || 'An error occurred during registration');
       } else {
         setError('An error occurred during registration');

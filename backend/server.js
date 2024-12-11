@@ -4,11 +4,9 @@ const connectDB = require('./config/db');
 const cors = require('cors');
 const crypto = require('crypto');
 const path = require('path');
+const helmet = require('helmet');
 
 const app = express();
-
-// Photo Reference
-app.use(express.static('public'));
 
 // Generate a consistent encryption key
 const ENCRYPTION_KEY = crypto.scryptSync(process.env.ENCRYPTION_SECRET || 'default-secret', 'salt', 32);
@@ -17,36 +15,35 @@ global.ENCRYPTION_KEY = ENCRYPTION_KEY;
 // Connect Database
 connectDB();
 
-// CORS configuration
+// Init Middleware
+app.use(express.json({ extended: false }));
+
 const corsOptions = {
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  credentials: true
 };
-
-// Init Middleware
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(helmet());
 
-// Serve static files from the public/uploads directory
 const uploadsPath = path.join(__dirname, 'public', 'uploads');
-console.log('Serving static files from:', uploadsPath);
-app.use('/public/uploads', express.static(uploadsPath));
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+// Serve static files from the uploads directory
+app.use('/public/uploads', express.static(uploadsPath, { maxAge: '1d' }));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'), { maxAge: '1d' }));
 
+const authRoutes = require('./routes/auth');
 
-// Logging middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
+app.use('/api/auth', authRoutes);
 
 // Define Routes
 app.use('/api/users', require('./routes/users'));
-app.use('/api/auth', require('./routes/auth'));
 app.use('/api/shops', require('./routes/shops'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/chat', require('./routes/chat'));
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK' });
+});
 
 const PORT = process.env.PORT || 5000;
 
@@ -56,12 +53,11 @@ app.listen(PORT, () => {
   console.log('MongoDB URI:', process.env.MONGODB_URI ? '[REDACTED]' : 'Not set');
   console.log('JWT Secret:', process.env.JWT_SECRET ? '[REDACTED]' : 'Not set');
   console.log('Encryption Key:', ENCRYPTION_KEY ? '[GENERATED]' : 'Not set');
-  console.log('Frontend URL:', process.env.FRONTEND_URL || 'http://localhost:3000');
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('Global error handler:', err.stack);
+  console.error(err.stack);
   res.status(500).send('Something went wrong!');
 });
 

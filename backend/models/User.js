@@ -25,6 +25,8 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Shop'
   }],
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
   createdAt: {
     type: Date,
     default: Date.now
@@ -35,10 +37,13 @@ const UserSchema = new mongoose.Schema({
 UserSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   try {
+    console.log('Hashing password');
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
+    console.log('Password hashed successfully');
     next();
   } catch (error) {
+    console.error('Error hashing password:', error);
     next(error);
   }
 });
@@ -46,8 +51,12 @@ UserSchema.pre('save', async function(next) {
 // Method to compare passwords
 UserSchema.methods.comparePassword = async function(candidatePassword) {
   try {
-    return await bcrypt.compare(candidatePassword, this.password);
+    console.log('Comparing passwords');
+    const isMatch = await bcrypt.compare(candidatePassword, this.password);
+    console.log('Password match result:', isMatch);
+    return isMatch;
   } catch (error) {
+    console.error('Error comparing passwords:', error);
     throw error;
   }
 };

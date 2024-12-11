@@ -2,9 +2,11 @@ const jwt = require('jsonwebtoken');
 
 module.exports = function(req, res, next) {
   // Get token from header
-  const token = req.header('Authorization')?.split(' ')[1];
+  const authHeader = req.header('Authorization');
+  console.log('Received Authorization header:', authHeader);
 
-  console.log('Received Authorization header:', req.header('Authorization'));
+  // Extract token (remove 'Bearer ' if present)
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
   console.log('Extracted token:', token);
 
   // Check if no token

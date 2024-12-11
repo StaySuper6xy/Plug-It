@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Container, 
   Typography, 
@@ -14,6 +14,7 @@ import api from '../utils/api';
 
 export default function ShopPage() {
   const { shopId } = useParams();
+  const navigate = useNavigate();
   const [shop, setShop] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,10 @@ export default function ShopPage() {
     if (!prices || prices.length === 0) return null;
     const lowestPrice = Math.min(...prices.map(p => p.price));
     return lowestPrice.toFixed(2);
+  };
+
+  const handleViewDetails = (productId) => {
+    navigate(`/product/${productId}`);
   };
 
   if (loading || !shop) {
@@ -129,6 +134,7 @@ export default function ShopPage() {
                         bgcolor: 'primary.dark',
                       }
                     }}
+                    onClick={() => handleViewDetails(product._id)}
                   >
                     VIEW DETAILS
                   </Button>

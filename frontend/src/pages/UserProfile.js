@@ -1,25 +1,18 @@
-import React, { useContext, useState } from 'react';
-import { Container, Typography, TextField, Button, Box, Paper } from '@mui/material';
+import React, { useState, useContext } from 'react';
+import { Container, Typography, Button, TextField, Grid, Paper } from '@mui/material';
 import { AuthContext } from '../contexts/AuthContext';
 import api from '../utils/api';
 
-const Profile = () => {
-  const { user, fetchUser } = useContext(AuthContext);
-  const [formData, setFormData] = useState({
-    username: user?.username || '',
-    email: user?.email || '',
-    password: '',
-  });
+const UserProfile = () => {
+  const { user, updateUser } = useContext(AuthContext);
+  const [name, setName] = useState(user ? user.name : '');
+  const [email, setEmail] = useState(user ? user.email : '');
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e) => {
+  const handleUpdateProfile = async (e) => {
     e.preventDefault();
     try {
-      await api.put('/api/users/profile', formData);
-      fetchUser();
+      const response = await api.put('/users/profile', { name, email });
+      updateUser(response.data);
       alert('Profile updated successfully');
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -27,56 +20,65 @@ const Profile = () => {
     }
   };
 
+  const handleCreateShop = async () => {
+    try {
+      const response = await api.post('/shops', { name: 'My First Shop', description: 'Welcome to my shop!' });
+      updateUser({ ...user, shops: [...(user.shops || []), response.data._id] });
+      alert('Shop created successfully');
+    } catch (error) {
+      console.error('Error creating shop:', error);
+      alert('Failed to create shop');
+    }
+  };
+
   if (!user) {
-    return <Typography>Please log in to view your profile.</Typography>;
+    return <Typography>Loading...</Typography>;
   }
 
   return (
-    <Container maxWidth="sm">
-      <Paper elevation={3} sx={{ p: 4, mt: 4 }}>
+    <Container maxWidth="md">
+      <Paper elevation={3} style={{ padding: '2rem', marginTop: '2rem' }}>
         <Typography variant="h4" gutterBottom>
           User Profile
         </Typography>
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-          <TextField
-            fullWidth
-            label="Username"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            margin="normal"
-          />
-          <TextField
-            fullWidth
-            label="Email"
-            name="email"
-            type="email"
-            value={formData.email}
-            onChange={handleChange}
-            margin="normal"
-          />
-          <TextField
-            fullWidth
-            label="New Password"
-            name="password"
-            type="password"
-            value={formData.password}
-            onChange={handleChange}
-            margin="normal"
-          />
+        <form onSubmit={handleUpdateProfile}>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Button type="submit" variant="contained" color="primary">
+                Update Profile
+              </Button>
+            </Grid>
+          </Grid>
+        </form>
+        {(!user.shops || user.shops.length === 0) && (
           <Button
-            type="submit"
             variant="contained"
-            color="primary"
-            fullWidth
-            sx={{ mt: 3 }}
+            color="secondary"
+            onClick={handleCreateShop}
+            style={{ marginTop: '2rem' }}
           >
-            Update Profile
+            Create Your First Shop
           </Button>
-        </Box>
+        )}
       </Paper>
     </Container>
   );
 };
 
-export default Profile;
+export default UserProfile;

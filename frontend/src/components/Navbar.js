@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import { AppBar, Toolbar, Typography, Button, IconButton, Box } from '@mui/material';
-import { Link as RouterLink, Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import { Home, Store, ShoppingCart, Person, ExitToApp, Chat } from '@mui/icons-material';
 
@@ -19,18 +19,24 @@ const Navbar = () => {
           </IconButton>
           {user && (
             <>
-              <IconButton color="inherit" component={RouterLink} to="/store-setup">
-                <Store />
-              </IconButton>
-              <IconButton color="inherit" component={RouterLink} to="/manage-shop">
-                <ShoppingCart />
-              </IconButton>
               <IconButton color="inherit" component={RouterLink} to="/chat">
                 <Chat />
               </IconButton>
               <IconButton color="inherit" component={RouterLink} to="/profile">
                 <Person />
               </IconButton>
+              {user.role === 'vendor' && (
+                <>
+                  <IconButton color="inherit" component={RouterLink} to="/store-setup">
+                    <Store />
+                  </IconButton>
+                  {user.shops && user.shops.length > 0 && (
+                    <IconButton color="inherit" component={RouterLink} to={`/manage-shop/${user.shops[0]}`}>
+                      <ShoppingCart />
+                    </IconButton>
+                  )}
+                </>
+              )}
               <Button color="inherit" onClick={logout}>
                 <ExitToApp />
               </Button>
@@ -38,10 +44,10 @@ const Navbar = () => {
           )}
           {!user && (
             <>
-              <Button color="inherit" component={Link} to="/login">
+              <Button color="inherit" component={RouterLink} to="/login">
                 Login
               </Button>
-              <Button color="inherit" component={Link} to="/register">
+              <Button color="inherit" component={RouterLink} to="/register">
                 Register
               </Button>
             </>

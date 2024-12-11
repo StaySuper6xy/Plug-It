@@ -1,28 +1,25 @@
-import React, { useState, useContext } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { AuthContext } from '../contexts/AuthContext';
-import { TextField, Button, Typography, Container, Box, CircularProgress } from '@mui/material';
+import React, { useState } from 'react';
+import { TextField, Button, Typography, Container, Box } from '@mui/material';
+import { Link } from 'react-router-dom';
+import api from '../utils/api';
 
-const Login = () => {
+const ForgotPassword = () => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useContext(AuthContext);
-  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setMessage('');
     setError('');
-    setLoading(true);
     try {
-      await login(email, password);
-      navigate('/dashboard');
+      const response = await api.post('/auth/forgot-password', { email });
+      setMessage(response.data.message);
+      // In a real application, you would not display the reset token to the user
+      console.log('Reset token:', response.data.resetToken);
+      console.log('Reset link:', response.data.resetLink);
     } catch (err) {
-      console.error('Login error:', err);
-      setError(err.response?.data?.message || 'An error occurred during login. Please try again.');
-    } finally {
-      setLoading(false);
+      setError(err.response?.data?.message || 'An error occurred. Please try again.');
     }
   };
 
@@ -37,7 +34,7 @@ const Login = () => {
         }}
       >
         <Typography component="h1" variant="h5">
-          Sign in
+          Forgot Password
         </Typography>
         <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
           <TextField
@@ -51,40 +48,29 @@ const Login = () => {
             autoFocus
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={loading}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="password"
-            label="Password"
-            type="password"
-            id="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={loading}
           />
           <Button
             type="submit"
             fullWidth
             variant="contained"
             sx={{ mt: 3, mb: 2 }}
-            disabled={loading}
           >
-            {loading ? <CircularProgress size={24} /> : 'Sign In'}
+            Reset Password
           </Button>
           <Button
             component={Link}
-            to="/forgot-password"
+            to="/login"
             fullWidth
             variant="text"
             sx={{ mt: 1 }}
-            disabled={loading}
           >
-            Forgot Password?
+            Back to Login
           </Button>
+          {message && (
+            <Typography color="primary" align="center">
+              {message}
+            </Typography>
+          )}
           {error && (
             <Typography color="error" align="center">
               {error}
@@ -96,4 +82,5 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default ForgotPassword;
+
