@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { Container, Typography, TextField, Button, Stepper, Step, StepLabel, Box } from '@mui/material';
-import api from '../utils/api';
 import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../contexts/AuthContext';
 
 const steps = ['Basic Information', 'Location', 'Visibility'];
 
@@ -17,6 +17,7 @@ export default function StoreSetup() {
   });
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { createShop, updateUserRole } = useContext(AuthContext);
 
   const handleChange = (e) => {
     setStoreData({ ...storeData, [e.target.name]: e.target.value });
@@ -33,12 +34,13 @@ export default function StoreSetup() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post('/shops', storeData);
-      console.log('Store created:', response.data);
+      await createShop(storeData);
+      await updateUserRole('vendor');
+      console.log('Shop created successfully');
       navigate('/dashboard');
     } catch (error) {
-      console.error('Error creating store:', error);
-      setError('Failed to create store. Please try again.');
+      console.error('Error creating shop:', error);
+      setError('Failed to create shop. Please try again.');
     }
   };
 
@@ -160,3 +162,5 @@ export default function StoreSetup() {
     </Container>
   );
 }
+
+

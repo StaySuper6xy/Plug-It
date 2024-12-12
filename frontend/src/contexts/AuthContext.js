@@ -12,7 +12,13 @@ export const AuthProvider = ({ children }) => {
   const fetchUserData = async () => {
     try {
       const response = await api.get('/users/me');
-      setUser(response.data);
+      console.log('Raw user data from API:', response.data);
+      const userData = {
+        ...response.data,
+        shops: response.data.shops || []
+      };
+      setUser(userData);
+      console.log('User data set in state:', userData);
     } catch (error) {
       console.error('Error fetching user data:', error);
       throw error;
@@ -89,8 +95,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUserRole = async (newRole) => {
+    try {
+      const response = await api.put('/users/role', { role: newRole });
+      setUser(response.data);
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      throw error;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, register, updateUser, createShop, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, register, updateUser, createShop, updateUserRole, loading }}>
       {children}
     </AuthContext.Provider>
   );

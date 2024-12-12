@@ -115,9 +115,7 @@ const UserDashboard = () => {
                   >
                     <CardContent>
                       <Typography variant="subtitle1">
-                        <Link to={`/shop/${shop._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                          {shop.name}
-                        </Link>
+                        {shop.name}
                       </Typography>
                       <Typography variant="body2">{shop.address || 'No physical address'}</Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -156,8 +154,8 @@ const UserDashboard = () => {
             <Button 
               component={Link} 
               to={`/manage-shop/${selectedShop._id}`} 
-              variant="outlined" 
-              color="primary" 
+              variant="contained" 
+              color="secondary" 
               sx={{ mt: 2 }}
             >
               Manage Shop
@@ -165,8 +163,26 @@ const UserDashboard = () => {
           </CardContent>
         </Card>
       )}
-      </Container>
+      {shops.length === 0 && user.role === 'vendor' && (
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="body1">
+            You don't have any shops yet. Would you like to create one?
+          </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            component={Link}
+            to="/store-setup"
+            sx={{ mt: 2 }}
+          >
+            Create Your First Shop
+          </Button>
+        </Box>
+      )}
+    </Container>
   );
 };
 
 export default UserDashboard;
+
+

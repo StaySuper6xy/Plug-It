@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { check, validationResult } = require('express-validator');
 
 const User = require('../models/User');
+const Shop = require('../models/Shop'); // Add this line to import the Shop model
 const auth = require('../middleware/auth');
 
 // @route   POST api/users
@@ -71,11 +72,48 @@ router.get('/me', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
       .select('-password')
-      .populate('shops', 'name');
-    res.json(user);
+      .populate('shops', 'name _id'); // Include _id in the populated shops
+    
+    // Fetch all shops associated with the user
+    const shops = await Shop.find({ owner: req.user.id });
+    
+    // Combine user data with shops
+    const userData = user.toObject();
+    userData.shops = shops;
+
+    console.log('User data being sent from backend:', userData);
+    res.json(userData);
   } catch (err) {
-    console.error(err.message);
+    console.error('Error in /me route:', err.message);
     res.status(500).send('Server Error');
+  }
+});
+
+// @route   PUT api/users/role
+// @desc    Update user role
+// @access  Private
+router.put('/role', auth, async (req, res) => {
+  try {
+    const { role } = req.body;
+    
+    if (!['user', 'vendor', 'admin'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { role },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

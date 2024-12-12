@@ -1,33 +1,34 @@
 import React, { useState, useContext } from 'react';
 import { Container, Typography, Button, TextField, Grid, Paper } from '@mui/material';
 import { AuthContext } from '../contexts/AuthContext';
-import api from '../utils/api';
+import { useNavigate } from 'react-router-dom';
 
 const UserProfile = () => {
-  const { user, updateUser } = useContext(AuthContext);
-  const [name, setName] = useState(user ? user.name : '');
+  const { user, updateUser, updateUserRole } = useContext(AuthContext);
+  const [name, setName] = useState(user ? user.username : '');
   const [email, setEmail] = useState(user ? user.email : '');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.put('/users/profile', { name, email });
-      updateUser(response.data);
+      await updateUser({ username: name, email });
       alert('Profile updated successfully');
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Failed to update profile');
+      setError('Failed to update profile');
     }
   };
 
-  const handleCreateShop = async () => {
+  const handleBecomeVendor = async () => {
     try {
-      const response = await api.post('/shops', { name: 'My First Shop', description: 'Welcome to my shop!' });
-      updateUser({ ...user, shops: [...(user.shops || []), response.data._id] });
-      alert('Shop created successfully');
+      await updateUserRole('vendor');
+      alert('You are now a vendor!');
+      navigate('/dashboard');
     } catch (error) {
-      console.error('Error creating shop:', error);
-      alert('Failed to create shop');
+      console.error('Error becoming a vendor:', error);
+      setError('Failed to become a vendor');
     }
   };
 
@@ -66,15 +67,20 @@ const UserProfile = () => {
             </Grid>
           </Grid>
         </form>
-        {(!user.shops || user.shops.length === 0) && (
+        {user.role !== 'vendor' && (
           <Button
             variant="contained"
             color="secondary"
-            onClick={handleCreateShop}
+            onClick={handleBecomeVendor}
             style={{ marginTop: '2rem' }}
           >
-            Create Your First Shop
+            Become a Vendor
           </Button>
+        )}
+        {error && (
+          <Typography color="error" style={{ marginTop: '1rem' }}>
+            {error}
+          </Typography>
         )}
       </Paper>
     </Container>
@@ -82,3 +88,5 @@ const UserProfile = () => {
 };
 
 export default UserProfile;
+
+

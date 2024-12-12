@@ -2,10 +2,14 @@ import React, { useContext } from 'react';
 import { AppBar, Toolbar, Typography, Button, IconButton, Box } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { Home, Store, ShoppingCart, Person, ExitToApp, Chat } from '@mui/icons-material';
+import { Home, Store, Settings, Person, ExitToApp, Chat } from '@mui/icons-material';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
+  
+  console.log('Current user in Navbar:', user);
+  console.log('User role:', user?.role);
+  console.log('User shops:', user?.shops);
 
   return (
     <AppBar position="static">
@@ -27,12 +31,22 @@ const Navbar = () => {
               </IconButton>
               {user.role === 'vendor' && (
                 <>
-                  <IconButton color="inherit" component={RouterLink} to="/store-setup">
+                  <IconButton 
+                    color="inherit" 
+                    component={RouterLink} 
+                    to="/store-setup"
+                    title="Create Shop"
+                  >
                     <Store />
                   </IconButton>
                   {user.shops && user.shops.length > 0 && (
-                    <IconButton color="inherit" component={RouterLink} to={`/manage-shop/${user.shops[0]}`}>
-                      <ShoppingCart />
+                    <IconButton 
+                      color="inherit" 
+                      component={RouterLink} 
+                      to={`/manage-shop/${user.shops[0]._id}`}
+                      title="Manage Shop"
+                    >
+                      <Settings />
                     </IconButton>
                   )}
                 </>
