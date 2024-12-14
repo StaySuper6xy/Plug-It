@@ -174,7 +174,7 @@ router.post('/:shopId/products', auth, upload.array('images', 5), async (req, re
       inventory: req.body.inventory,
       inventoryUnit: req.body.inventoryUnit,
       customInventoryUnit: req.body.customInventoryUnit,
-      images: req.files.map(file => `${file.filename}`), // Change: removed `uploads/` prefix
+      images: req.files ? req.files.map(file => `${file.filename}`) : [], // Handle case when no files are uploaded
       shop: req.params.shopId
     });
 
@@ -187,6 +187,7 @@ router.post('/:shopId/products', auth, upload.array('images', 5), async (req, re
     res.status(500).send('Server Error');
   }
 });
+
 
 // Update a product
 router.put('/:shopId/products/:productId', auth, upload.array('images'), async (req, res) => {
