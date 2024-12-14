@@ -29,6 +29,10 @@ const ShopSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isOpen: {
+    type: Boolean,
+    default: false
+  },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -38,6 +42,30 @@ const ShopSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product'
   }],
+  fulfillmentOptions: {
+    pickup: { type: Boolean, default: true },
+    delivery: { type: Boolean, default: false },
+    meetup: { type: Boolean, default: false }
+  },
+  deliveryArea: {
+    type: {
+      type: String,
+      enum: ['Polygon', 'Circle'],
+      required: function() { return this.fulfillmentOptions.delivery || this.fulfillmentOptions.meetup; }
+    },
+    coordinates: {
+      type: [[[Number]]], // For Polygon
+      required: function() { return this.deliveryArea && this.deliveryArea.type === 'Polygon'; }
+    },
+    center: {
+      type: [Number], // For Circle
+      required: function() { return this.deliveryArea && this.deliveryArea.type === 'Circle'; }
+    },
+    radius: {
+      type: Number, // For Circle, in meters
+      required: function() { return this.deliveryArea && this.deliveryArea.type === 'Circle'; }
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -45,9 +73,23 @@ const ShopSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  estimatedResponseTime: {
+    type: Number,
+    default: 30
+  },
+  motd: {
+    type: String,
+    default: ''
+  },
+  status: {
+    type: String,
+    enum: ['open', 'closed', 'busy'],
+    default: 'closed'
   }
 }, { timestamps: true });
 
 ShopSchema.index({ location: '2dsphere' });
+ShopSchema.index({ 'deliveryArea.coordinates': '2dsphere' });
 
 module.exports = mongoose.model('Shop', ShopSchema);

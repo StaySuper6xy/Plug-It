@@ -32,28 +32,36 @@ const upload = multer({ storage: storage });
 
 // Get all shops
 router.get('/', auth, async (req, res) => {
-  console.log('GET /shops route hit');
   try {
+    console.log('Fetching shops for user:', req.user.id);
     const shops = await Shop.find({ owner: req.user.id });
+    console.log('Shops fetched:', shops);
     res.json(shops);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    console.error('Error fetching shops:', err);
+    res.status(500).json({ message: 'Server Error', error: err.message });
   }
 });
 
 // Create a new shop
 router.post('/', auth, async (req, res) => {
-  const { name, description, address, latitude, longitude, isPublic } = req.body;
+  const { 
+    name, 
+    description, 
+    address, 
+    location,
+    isPublic,
+    fulfillmentOptions
+  } = req.body;
 
   try {
     const newShop = new Shop({
       name,
       description,
       address,
-      latitude,
-      longitude,
+      location: location || { type: 'Point', coordinates: [0, 0] },
       isPublic,
+      fulfillmentOptions: fulfillmentOptions || { pickup: true, delivery: false, meetup: false },
       owner: req.user.id
     });
 
@@ -84,31 +92,69 @@ router.get('/:id', async (req, res) => {
 
 // Update shop
 router.put('/:id', auth, async (req, res) => {
-  const { name, description, address, latitude, longitude, isPublic } = req.body;
+  const { 
+    name, 
+    description, 
+    address, 
+    latitude, 
+    longitude, 
+    isPublic,
+    isOpen,
+    fulfillmentOptions,
+    deliveryArea,
+    estimatedResponseTime,
+    motd,
+    status
+  } = req.body;
+
+  console.log('Updating shop:', req.params.id);
+  console.log('Update data:', req.body);
 
   try {
     let shop = await Shop.findById(req.params.id);
     if (!shop) {
+      console.log('Shop not found:', req.params.id);
       return res.status(404).json({ msg: 'Shop not found' });
     }
 
     // Check user
     if (shop.owner.toString() !== req.user.id) {
+      console.log('User not authorized:', req.user.id);
       return res.status(401).json({ msg: 'User not authorized' });
     }
 
-    shop.name = name;
-    shop.description = description;
-    shop.address = address;
-    shop.latitude = latitude;
-    shop.longitude = longitude;
-    shop.isPublic = isPublic;
+    // Only update fields that are provided
+    if (name) shop.name = name;
+    if (description) shop.description = description;
+    if (address) shop.address = address;
+    if (latitude && longitude) {
+      shop.location = {
+        type: 'Point',
+        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+      };
+    }
+    if (isPublic !== undefined) shop.isPublic = isPublic;
+    if (isOpen !== undefined) shop.isOpen = isOpen;
+    if (fulfillmentOptions) shop.fulfillmentOptions = fulfillmentOptions;
+    if (deliveryArea) {
+      shop.deliveryArea = {
+        type: deliveryArea.type,
+        ...(deliveryArea.type === 'Polygon' 
+          ? { coordinates: deliveryArea.coordinates } 
+          : { center: deliveryArea.center, radius: deliveryArea.radius })
+      };
+    }
+    if (estimatedResponseTime) shop.estimatedResponseTime = estimatedResponseTime;
+    if (motd !== undefined) shop.motd = motd;
+    if (status) shop.status = status;
 
+    console.log('Saving updated shop:', shop);
     await shop.save();
+    console.log('Shop updated successfully');
     res.json(shop);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    console.error('Error updating shop:', err);
+    res.status(500).json({ message: 'Server Error', error: err.message });
   }
 });
 
@@ -188,7 +234,6 @@ router.post('/:shopId/products', auth, upload.array('images', 5), async (req, re
   }
 });
 
-
 // Update a product
 router.put('/:shopId/products/:productId', auth, upload.array('images'), async (req, res) => {
   try {
@@ -262,6 +307,34 @@ router.delete('/:shopId/products/:productId', auth, async (req, res) => {
     res.json({ message: 'Product removed' });
   } catch (err) {
     console.error('Error deleting product:', err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Update shop status
+router.put('/:id/status', auth, async (req, res) => {
+  const { status } = req.body;
+
+  try {
+    let shop = await Shop.findById(req.params.id);
+    if (!shop) {
+      return res.status(404).json({ msg: 'Shop not found' });
+    }
+
+    // Check user
+    if (shop.owner.toString() !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    if (!['open', 'closed', 'busy'].includes(status)) {
+      return res.status(400).json({ msg: 'Invalid status' });
+    }
+
+    shop.status = status;
+    await shop.save();
+    res.json(shop);
+  } catch (err) {
+    console.error(err.message);
     res.status(500).send('Server Error');
   }
 });

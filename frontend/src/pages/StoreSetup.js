@@ -34,7 +34,14 @@ export default function StoreSetup() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await createShop(storeData);
+      const shopData = {
+        ...storeData,
+        location: {
+          type: 'Point',
+          coordinates: [parseFloat(storeData.longitude) || 0, parseFloat(storeData.latitude) || 0]
+        }
+      };
+      await createShop(shopData);
       await updateUserRole('vendor');
       console.log('Shop created successfully');
       navigate('/dashboard');
@@ -162,5 +169,3 @@ export default function StoreSetup() {
     </Container>
   );
 }
-
-

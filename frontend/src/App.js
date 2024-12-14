@@ -17,6 +17,7 @@ import ProductDetail from './pages/ProductDetail';
 import Chat from './pages/Chat';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import Cart from './pages/Cart'; // Import the new Cart component
 
 const darkTheme = createTheme({
   palette: {
@@ -46,6 +47,7 @@ function App() {
             <Route path="/product/:productId" element={<ProductDetail />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:partnerId" element={<Chat />} />
+            <Route path="/cart" element={<Cart />} /> {/* Add this new route for the Cart page */}
           </Routes>
         </AuthProvider>
       </Router>

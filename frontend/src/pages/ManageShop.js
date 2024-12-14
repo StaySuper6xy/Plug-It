@@ -1,8 +1,16 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Container, Typography, Button, TextField, Card, CardContent, CardActions, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tabs, Tab, Box } from '@mui/material';
+import { 
+  Container, Typography, Button, TextField, Card, CardContent, CardActions, 
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, 
+  Tabs, Tab, Box, FormControl, InputLabel, Select, MenuItem, FormGroup, FormControlLabel, Checkbox
+} from '@mui/material';
+import { MapContainer, TileLayer, Circle, Polygon, FeatureGroup } from 'react-leaflet';
+import { EditControl } from "react-leaflet-draw";
 import { AuthContext } from '../contexts/AuthContext';
 import api from '../utils/api';
+import 'leaflet/dist/leaflet.css';
+import { Circle as LCircle, Polygon as LPolygon } from 'leaflet';
 
 const ManageShop = () => {
   const [shops, setShops] = useState([]);
@@ -13,8 +21,21 @@ const ManageShop = () => {
   const [invitationCode, setInvitationCode] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [deliveryAreaType, setDeliveryAreaType] = useState('Circle');
+  const [deliveryRadius, setDeliveryRadius] = useState(1000); // 1km default
+  const [deliveryPolygon, setDeliveryPolygon] = useState([]);
+  const [mapCenter, setMapCenter] = useState([0, 0]);
+  //const [isOpen, setIsOpen] = useState(false);
+  const [fulfillmentOptions, setFulfillmentOptions] = useState({
+    pickup: false,
+    delivery: false,
+    meetup: false
+  });
+  const [motd, setMotd] = useState('');
+  const [status, setStatus] = useState('closed');
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const mapRef = useRef();
 
   useEffect(() => {
     if (user) {
@@ -26,10 +47,20 @@ const ManageShop = () => {
 
   const fetchShops = async () => {
     try {
+      console.log('Fetching shops...');
       const response = await api.get('/shops');
+      console.log('Shops fetched:', response.data);
       setShops(response.data);
       if (response.data.length > 0) {
         setSelectedShop(response.data[0]);
+        setMapCenter(response.data[0].location.coordinates.reverse());
+        setStatus(response.data[0].status || 'closed');
+        setFulfillmentOptions(response.data[0].fulfillmentOptions || {
+          pickup: false,
+          delivery: false,
+          meetup: false
+        });
+        setMotd(response.data[0].motd || '');
       }
     } catch (error) {
       console.error('Error fetching shops:', error);
@@ -39,11 +70,30 @@ const ManageShop = () => {
   const handleEditShop = (shop) => {
     setEditedShop(shop);
     setIsEditing(true);
+    setDeliveryAreaType(shop.deliveryArea?.type || 'Circle');
+    setDeliveryRadius(shop.deliveryArea?.radius || 1000);
+    setDeliveryPolygon(shop.deliveryArea?.coordinates?.[0] || []);
+    setMapCenter(shop.location.coordinates.reverse());
+    setMotd(shop.motd || '');
+    setStatus(shop.status || 'closed');
   };
 
   const handleSaveEdit = async () => {
     try {
-      await api.put(`/shops/${editedShop._id}`, editedShop);
+      const updatedShop = {
+        ...editedShop,
+        deliveryArea: {
+          type: deliveryAreaType,
+          ...(deliveryAreaType === 'Circle' 
+            ? { center: mapCenter, radius: deliveryRadius } 
+            : { coordinates: [deliveryPolygon] })
+        },
+        motd,
+        status
+      };
+      console.log('Saving edited shop:', updatedShop);
+      const response = await api.put(`/shops/${updatedShop._id}`, updatedShop);
+      console.log('Shop edit response:', response.data);
       setIsEditing(false);
       fetchShops();
     } catch (error) {
@@ -78,6 +128,74 @@ const ManageShop = () => {
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
     setSelectedShop(shops[newValue]);
+    setMapCenter(shops[newValue].location.coordinates.reverse());
+    setFulfillmentOptions(shops[newValue].fulfillmentOptions);
+    setStatus(shops[newValue].status);
+    setMotd(shops[newValue].motd);
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    try {
+      console.log('Updating shop status:', newStatus);
+      const response = await api.put(`/shops/${selectedShop._id}`, { 
+        status: newStatus,
+        name: selectedShop.name,
+        description: selectedShop.description,
+        deliveryArea: selectedShop.deliveryArea || { type: 'Circle', radius: 1000, center: selectedShop.location.coordinates }
+      });
+      console.log('Shop status update response:', response.data);
+      setStatus(newStatus);
+      setSelectedShop(prevShop => ({ ...prevShop, status: newStatus }));
+    } catch (error) {
+      console.error('Error updating shop status:', error);
+    }
+  };
+
+  const handleFulfillmentOptionChange = async (option) => {
+    try {
+      const newOptions = { ...fulfillmentOptions, [option]: !fulfillmentOptions[option] };
+      console.log('Updating fulfillment options:', newOptions);
+      const response = await api.put(`/shops/${selectedShop._id}`, { 
+        fulfillmentOptions: newOptions,
+        name: selectedShop.name,
+        description: selectedShop.description,
+        deliveryArea: selectedShop.deliveryArea || { type: 'Circle', radius: 1000, center: selectedShop.location.coordinates }
+      });
+      console.log('Fulfillment options update response:', response.data);
+      setFulfillmentOptions(newOptions);
+      setSelectedShop({ ...selectedShop, fulfillmentOptions: newOptions });
+      fetchShops();
+    } catch (error) {
+      console.error('Error updating fulfillment options:', error);
+    }
+  };
+
+  const handleDeliveryAreaTypeChange = (event) => {
+    setDeliveryAreaType(event.target.value);
+  };
+
+  const handleMapCreated = (e) => {
+    const { layerType, layer } = e;
+    if (layerType === 'circle') {
+      setDeliveryAreaType('Circle');
+      setDeliveryRadius(layer.getRadius());
+      setMapCenter([layer.getLatLng().lat, layer.getLatLng().lng]);
+    } else if (layerType === 'polygon') {
+      setDeliveryAreaType('Polygon');
+      setDeliveryPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lat, latLng.lng]));
+    }
+  };
+
+  const handleMapEdited = (e) => {
+    const { layers } = e;
+    layers.eachLayer((layer) => {
+      if (layer instanceof LCircle) {
+        setDeliveryRadius(layer.getRadius());
+        setMapCenter([layer.getLatLng().lat, layer.getLatLng().lng]);
+      } else if (layer instanceof LPolygon) {
+        setDeliveryPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lat, latLng.lng]));
+      }
+    });
   };
 
   return (
@@ -106,6 +224,40 @@ const ManageShop = () => {
                   <Typography variant="body2">
                     Type: {selectedShop.isPublic ? 'Public' : 'Private'}
                   </Typography>
+                  <Typography variant="body2">
+                    Status: {selectedShop.status}
+                  </Typography>
+                  <FormControl fullWidth margin="normal">
+                    <InputLabel id="shop-status-label">Shop Status</InputLabel>
+                    <Select
+                      labelId="shop-status-label"
+                      value={status}
+                      onChange={(e) => handleStatusChange(e.target.value)}
+                    >
+                      <MenuItem value="open">Open</MenuItem>
+                      <MenuItem value="closed">Closed</MenuItem>
+                      <MenuItem value="busy">Busy</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {status === 'open' && (
+                    <FormControl component="fieldset" margin="normal">
+                      <Typography variant="subtitle1">Fulfillment Options</Typography>
+                      <FormGroup>
+                        <FormControlLabel
+                          control={<Checkbox checked={fulfillmentOptions.pickup} onChange={() => handleFulfillmentOptionChange('pickup')} name="pickup" />}
+                          label="Pickup"
+                        />
+                        <FormControlLabel
+                          control={<Checkbox checked={fulfillmentOptions.delivery} onChange={() => handleFulfillmentOptionChange('delivery')} name="delivery" />}
+                          label="Delivery"
+                        />
+                        <FormControlLabel
+                          control={<Checkbox checked={fulfillmentOptions.meetup} onChange={() => handleFulfillmentOptionChange('meetup')} name="meetup" />}
+                          label="Meet-up"
+                        />
+                      </FormGroup>
+                    </FormControl>
+                  )}
                 </CardContent>
                 <CardActions>
                   <Button size="small" onClick={() => handleEditShop(selectedShop)}>Edit</Button>
@@ -122,7 +274,7 @@ const ManageShop = () => {
       )}
 
       {/* Edit Shop Dialog */}
-      <Dialog open={isEditing} onClose={() => setIsEditing(false)}>
+      <Dialog open={isEditing} onClose={() => setIsEditing(false)} maxWidth="md" fullWidth>
         <DialogTitle>Edit Shop</DialogTitle>
         <DialogContent>
           <TextField
@@ -149,6 +301,77 @@ const ManageShop = () => {
             value={editedShop.address || ''}
             onChange={(e) => setEditedShop({ ...editedShop, address: e.target.value })}
           />
+          <TextField
+            margin="dense"
+            label="Message of the Day"
+            fullWidth
+            value={motd}
+            onChange={(e) => setMotd(e.target.value)}
+          />
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Shop Status</InputLabel>
+            <Select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <MenuItem value="open">Open</MenuItem>
+              <MenuItem value="closed">Closed</MenuItem>
+              <MenuItem value="busy">Busy</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Delivery Area Type</InputLabel>
+            <Select
+              value={deliveryAreaType}
+              onChange={handleDeliveryAreaTypeChange}
+            >
+              <MenuItem value="Circle">Circle</MenuItem>
+              <MenuItem value="Polygon">Polygon</MenuItem>
+            </Select>
+          </FormControl>
+
+          {deliveryAreaType === 'Circle' && (
+            <TextField
+              margin="dense"
+              label="Delivery Radius (meters)"
+              fullWidth
+              type="number"
+              value={deliveryRadius}
+              onChange={(e) => setDeliveryRadius(Number(e.target.value))}
+            />
+          )}
+
+          <Box mt={2} height={400}>
+            <MapContainer 
+              center={mapCenter} 
+              zoom={13} 
+              style={{ height: '100%', width: '100%' }}
+              ref={mapRef}
+            >
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <FeatureGroup>
+                <EditControl
+                  position="topright"
+                  onCreated={handleMapCreated}
+                  onEdited={handleMapEdited}
+                  draw={{
+                    rectangle: false,
+                    marker: false,
+                    circlemarker: false,
+                    polyline: false,
+                    circle: deliveryAreaType === 'Circle',
+                    polygon: deliveryAreaType === 'Polygon',
+                  }}
+                />
+                {deliveryAreaType === 'Circle' && (
+                  <Circle center={mapCenter} radius={deliveryRadius} />
+                )}
+                {deliveryAreaType === 'Polygon' && deliveryPolygon.length > 0 && (
+                  <Polygon positions={deliveryPolygon} />
+                )}
+              </FeatureGroup>
+            </MapContainer>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setIsEditing(false)}>Cancel</Button>

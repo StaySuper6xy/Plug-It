@@ -15,6 +15,7 @@ import {
   Alert,
 } from '@mui/material';
 import api from '../utils/api';
+import AddToCartButton from '../components/AddToCartButton';
 
 export default function ProductDetail() {
   const { productId } = useParams();
@@ -120,17 +121,13 @@ export default function ProductDetail() {
           <Typography variant="h5" gutterBottom>
             Price: ${selectedPrice.toFixed(2)}
           </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            size="large"
-            fullWidth
-            sx={{ mt: 2 }}
-          >
-            Add to Cart
-          </Button>
+          <AddToCartButton 
+            product={{...product, price: selectedPrice}} 
+            shopId={product.shop}
+          />
         </Grid>
       </Grid>
     </Container>
   );
 }
+

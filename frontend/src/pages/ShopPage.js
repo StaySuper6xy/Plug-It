@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Container, 
-  Typography, 
-  Grid, 
-  Card, 
-  CardContent, 
-  CardMedia, 
+import {
+  Container,
+  Typography,
+  Grid,
+  Card,
+  CardMedia,
   Button,
-  Box
+  Box,
+  Chip,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
+import { AccessTime, Message, LocalShipping, Store, MeetingRoom } from '@mui/icons-material';
 import api from '../utils/api';
 
 export default function ShopPage() {
@@ -73,12 +78,64 @@ export default function ShopPage() {
           {shop.name}
         </Typography>
         
-        <Typography variant="body1" sx={{ 
-          color: 'text.secondary',
-          mb: 6
-        }}>
+        <Typography variant="body1" paragraph>
           {shop.description}
         </Typography>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Chip
+            icon={<AccessTime />}
+            label={`Est. Response Time: ${shop.estimatedResponseTime} min`}
+            sx={{ mr: 2 }}
+          />
+          <Chip
+            icon={<Message />}
+            label={`Status: ${shop.status}`}
+            color={shop.status === 'open' ? 'success' : shop.status === 'busy' ? 'warning' : 'error'}
+          />
+        </Box>
+
+        {shop.motd && (
+          <Typography variant="body1" sx={{
+            bgcolor: 'primary.light',
+            color: 'primary.contrastText',
+            p: 2,
+            borderRadius: 1,
+            mb: 4
+          }}>
+            Message of the Day: {shop.motd}
+          </Typography>
+        )}
+
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h6" gutterBottom>Available Fulfillment Options:</Typography>
+          <List>
+            {shop.fulfillmentOptions.pickup && (
+              <ListItem>
+                <ListItemIcon>
+                  <Store />
+                </ListItemIcon>
+                <ListItemText primary="Pickup" />
+              </ListItem>
+            )}
+            {shop.fulfillmentOptions.delivery && (
+              <ListItem>
+                <ListItemIcon>
+                  <LocalShipping />
+                </ListItemIcon>
+                <ListItemText primary="Delivery" />
+              </ListItem>
+            )}
+            {shop.fulfillmentOptions.meetup && (
+              <ListItem>
+                <ListItemIcon>
+                  <MeetingRoom />
+                </ListItemIcon>
+                <ListItemText primary="Meetup" />
+              </ListItem>
+            )}
+          </List>
+        </Box>
 
         <Grid container spacing={3}>
           {products.map((product) => (
@@ -106,7 +163,7 @@ export default function ShopPage() {
                     : '/placeholder.svg'}
                   alt={product.name}
                 />
-                <CardContent sx={{ flexGrow: 1, p: 2 }}>
+                <Box sx={{ flexGrow: 1, p: 2 }}>
                   <Typography gutterBottom variant="h6" component="h2" sx={{
                     fontSize: '1.1rem',
                     fontWeight: 500,
@@ -138,7 +195,7 @@ export default function ShopPage() {
                   >
                     VIEW DETAILS
                   </Button>
-                </CardContent>
+                </Box>
               </Card>
             </Grid>
           ))}
@@ -147,3 +204,4 @@ export default function ShopPage() {
     </Box>
   );
 }
+

@@ -32,6 +32,7 @@ app.use('/public/uploads', express.static(uploadsPath, { maxAge: '1d' }));
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'), { maxAge: '1d' }));
 
 const authRoutes = require('./routes/auth');
+const cartRoutes = require('./routes/cart');
 
 app.use('/api/auth', authRoutes);
 
@@ -40,6 +41,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/shops', require('./routes/shops'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/chat', require('./routes/chat'));
+app.use('/api/cart', cartRoutes); // Add this line for cart routes
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' });
