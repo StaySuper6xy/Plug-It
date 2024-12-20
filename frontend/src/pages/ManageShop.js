@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Container, Typography, Button, TextField, Card, CardContent, CardActions, 
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, 
-  Tabs, Tab, Box, FormControl, InputLabel, Select, MenuItem, FormGroup, FormControlLabel, Checkbox
+  Tabs, Tab, Box, FormControl, InputLabel, Select, MenuItem, FormGroup, FormControlLabel, Checkbox,
+  Paper, Snackbar, Alert
 } from '@mui/material';
 import { MapContainer, TileLayer, Circle, Polygon, FeatureGroup } from 'react-leaflet';
 import { EditControl } from "react-leaflet-draw";
 import { AuthContext } from '../contexts/AuthContext';
 import api from '../utils/api';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
 import { Circle as LCircle, Polygon as LPolygon } from 'leaflet';
 
 const ManageShop = () => {
@@ -21,11 +23,12 @@ const ManageShop = () => {
   const [invitationCode, setInvitationCode] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
-  const [deliveryAreaType, setDeliveryAreaType] = useState('Circle');
-  const [deliveryRadius, setDeliveryRadius] = useState(1000); // 1km default
-  const [deliveryPolygon, setDeliveryPolygon] = useState([]);
+  const [availabilityAreaType, setAvailabilityAreaType] = useState('Circle');
+  const [availabilityRadius, setAvailabilityRadius] = useState(1000); // 1km default
+  const [availabilityPolygon, setAvailabilityPolygon] = useState([]);
   const [mapCenter, setMapCenter] = useState([0, 0]);
-  //const [isOpen, setIsOpen] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
   const [fulfillmentOptions, setFulfillmentOptions] = useState({
     pickup: false,
     delivery: false,
@@ -70,9 +73,9 @@ const ManageShop = () => {
   const handleEditShop = (shop) => {
     setEditedShop(shop);
     setIsEditing(true);
-    setDeliveryAreaType(shop.deliveryArea?.type || 'Circle');
-    setDeliveryRadius(shop.deliveryArea?.radius || 1000);
-    setDeliveryPolygon(shop.deliveryArea?.coordinates?.[0] || []);
+    setAvailabilityAreaType(shop.availabilityArea?.type || 'Circle');
+    setAvailabilityRadius(shop.availabilityArea?.radius || 1000);
+    setAvailabilityPolygon(shop.availabilityArea?.coordinates?.[0] || []);
     setMapCenter(shop.location.coordinates.reverse());
     setMotd(shop.motd || '');
     setStatus(shop.status || 'closed');
@@ -80,24 +83,45 @@ const ManageShop = () => {
 
   const handleSaveEdit = async () => {
     try {
+      let updatedAvailabilityArea;
+      if (availabilityAreaType === 'Circle') {
+        updatedAvailabilityArea = {
+          type: 'Circle',
+          center: {
+            type: 'Point',
+            coordinates: mapCenter.map(Number)
+          },
+          radius: Number(availabilityRadius)
+        };
+      } else {
+        updatedAvailabilityArea = {
+          type: 'Polygon',
+          coordinates: [availabilityPolygon.map(coord => coord.map(Number))]
+        };
+      }
+
       const updatedShop = {
         ...editedShop,
-        deliveryArea: {
-          type: deliveryAreaType,
-          ...(deliveryAreaType === 'Circle' 
-            ? { center: mapCenter, radius: deliveryRadius } 
-            : { coordinates: [deliveryPolygon] })
+        location: {
+          type: 'Point',
+          coordinates: mapCenter.map(Number)
         },
+        availabilityArea: updatedAvailabilityArea,
         motd,
         status
       };
-      console.log('Saving edited shop:', updatedShop);
+
+      console.log('Saving edited shop:', JSON.stringify(updatedShop, null, 2));
       const response = await api.put(`/shops/${updatedShop._id}`, updatedShop);
       console.log('Shop edit response:', response.data);
       setIsEditing(false);
+      setSnackbarOpen(true);
+      setSnackbarMessage('Shop updated successfully');
       fetchShops();
     } catch (error) {
       console.error('Error updating shop:', error);
+      setSnackbarOpen(true);
+      setSnackbarMessage(`Failed to update shop: ${error.response?.data?.message || error.message}`);
     }
   };
 
@@ -141,7 +165,7 @@ const ManageShop = () => {
         status: newStatus,
         name: selectedShop.name,
         description: selectedShop.description,
-        deliveryArea: selectedShop.deliveryArea || { type: 'Circle', radius: 1000, center: selectedShop.location.coordinates }
+        availabilityArea: selectedShop.availabilityArea || { type: 'Circle', radius: 1000, center: selectedShop.location.coordinates }
       });
       console.log('Shop status update response:', response.data);
       setStatus(newStatus);
@@ -159,7 +183,7 @@ const ManageShop = () => {
         fulfillmentOptions: newOptions,
         name: selectedShop.name,
         description: selectedShop.description,
-        deliveryArea: selectedShop.deliveryArea || { type: 'Circle', radius: 1000, center: selectedShop.location.coordinates }
+        availabilityArea: selectedShop.availabilityArea || { type: 'Circle', radius: 1000, center: selectedShop.location.coordinates }
       });
       console.log('Fulfillment options update response:', response.data);
       setFulfillmentOptions(newOptions);
@@ -170,19 +194,19 @@ const ManageShop = () => {
     }
   };
 
-  const handleDeliveryAreaTypeChange = (event) => {
-    setDeliveryAreaType(event.target.value);
+  const handleAvailabilityAreaTypeChange = (event) => {
+    setAvailabilityAreaType(event.target.value);
   };
 
   const handleMapCreated = (e) => {
     const { layerType, layer } = e;
     if (layerType === 'circle') {
-      setDeliveryAreaType('Circle');
-      setDeliveryRadius(layer.getRadius());
-      setMapCenter([layer.getLatLng().lat, layer.getLatLng().lng]);
+      setAvailabilityAreaType('Circle');
+      setAvailabilityRadius(layer.getRadius());
+      setMapCenter([layer.getLatLng().lng, layer.getLatLng().lat]);
     } else if (layerType === 'polygon') {
-      setDeliveryAreaType('Polygon');
-      setDeliveryPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lat, latLng.lng]));
+      setAvailabilityAreaType('Polygon');
+      setAvailabilityPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lng, latLng.lat]));
     }
   };
 
@@ -190,16 +214,16 @@ const ManageShop = () => {
     const { layers } = e;
     layers.eachLayer((layer) => {
       if (layer instanceof LCircle) {
-        setDeliveryRadius(layer.getRadius());
-        setMapCenter([layer.getLatLng().lat, layer.getLatLng().lng]);
+        setAvailabilityRadius(layer.getRadius());
+        setMapCenter([layer.getLatLng().lng, layer.getLatLng().lat]);
       } else if (layer instanceof LPolygon) {
-        setDeliveryPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lat, latLng.lng]));
+        setAvailabilityPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lng, latLng.lat]));
       }
     });
   };
 
   return (
-    <Container maxWidth="md">
+    <Container maxWidth="lg">
       <Typography variant="h4" gutterBottom>
         Manage Your Shops
       </Typography>
@@ -319,59 +343,62 @@ const ManageShop = () => {
               <MenuItem value="busy">Busy</MenuItem>
             </Select>
           </FormControl>
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Delivery Area Type</InputLabel>
-            <Select
-              value={deliveryAreaType}
-              onChange={handleDeliveryAreaTypeChange}
-            >
-              <MenuItem value="Circle">Circle</MenuItem>
-              <MenuItem value="Polygon">Polygon</MenuItem>
-            </Select>
-          </FormControl>
+          <Paper elevation={3} sx={{ p: 2, mt: 2 }}>
+            <Typography variant="h6" gutterBottom>Availability Area</Typography>
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Availability Area Type</InputLabel>
+              <Select
+                value={availabilityAreaType}
+                onChange={handleAvailabilityAreaTypeChange}
+              >
+                <MenuItem value="Circle">Circle</MenuItem>
+                <MenuItem value="Polygon">Polygon</MenuItem>
+              </Select>
+            </FormControl>
 
-          {deliveryAreaType === 'Circle' && (
-            <TextField
-              margin="dense"
-              label="Delivery Radius (meters)"
-              fullWidth
-              type="number"
-              value={deliveryRadius}
-              onChange={(e) => setDeliveryRadius(Number(e.target.value))}
-            />
-          )}
+            {availabilityAreaType === 'Circle' && (
+              <TextField
+                margin="dense"
+                label="Availability Radius (meters)"
+                fullWidth
+                type="number"
+                value={availabilityRadius}
+                onChange={(e) => setAvailabilityRadius(Number(e.target.value))}
+              />
+            )}
 
-          <Box mt={2} height={400}>
-            <MapContainer 
-              center={mapCenter} 
-              zoom={13} 
-              style={{ height: '100%', width: '100%' }}
-              ref={mapRef}
-            >
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <FeatureGroup>
-                <EditControl
-                  position="topright"
-                  onCreated={handleMapCreated}
-                  onEdited={handleMapEdited}
-                  draw={{
-                    rectangle: false,
-                    marker: false,
-                    circlemarker: false,
-                    polyline: false,
-                    circle: deliveryAreaType === 'Circle',
-                    polygon: deliveryAreaType === 'Polygon',
-                  }}
-                />
-                {deliveryAreaType === 'Circle' && (
-                  <Circle center={mapCenter} radius={deliveryRadius} />
-                )}
-                {deliveryAreaType === 'Polygon' && deliveryPolygon.length > 0 && (
-                  <Polygon positions={deliveryPolygon} />
-                )}
-              </FeatureGroup>
-            </MapContainer>
-          </Box>
+            <Box mt={2} height={400}>
+              <MapContainer 
+                center={mapCenter} 
+                zoom={13} 
+                style={{ height: '100%', width: '100%' }}
+                ref={mapRef}
+              >
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <FeatureGroup>
+                  <EditControl
+                    position="topright"
+                    onCreated={handleMapCreated}
+                    onEdited={handleMapEdited}
+                    draw={{
+                      rectangle: false,
+                      marker: false,
+                      circlemarker: false,
+                      polyline: false,
+                      circle: availabilityAreaType === 'Circle',
+                      polygon: availabilityAreaType === 'Polygon',
+                    }}
+                  />
+                  {availabilityAreaType === 'Circle' && (
+                    <Circle center={mapCenter} radius={availabilityRadius} />
+                  )}
+                  {availabilityAreaType === 'Polygon' && availabilityPolygon.length > 0 && (
+                    <Polygon positions={availabilityPolygon} />
+                  )}
+                </FeatureGroup>
+              </MapContainer>
+            </Box>
+          </Paper>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setIsEditing(false)}>Cancel</Button>
@@ -413,6 +440,16 @@ const ManageShop = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnackbarOpen(false)} severity="success" sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

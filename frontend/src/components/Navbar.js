@@ -1,15 +1,28 @@
-import React, { useContext } from 'react';
-import { AppBar, Toolbar, Typography, Button, IconButton, Box } from '@mui/material';
+import React, { useContext, useState, useEffect } from 'react';
+import { AppBar, Toolbar, Typography, Button, IconButton, Box, Badge } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { Home, Store, Settings, Person, ExitToApp, Chat } from '@mui/icons-material';
+import { Home, Store, Settings, Person, ExitToApp, Chat, ShoppingCart } from '@mui/icons-material';
+import api from '../utils/api';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
-  
-  console.log('Current user in Navbar:', user);
-  console.log('User role:', user?.role);
-  console.log('User shops:', user?.shops);
+  const [cartItemCount, setCartItemCount] = useState(0);
+
+  useEffect(() => {
+    const fetchCartItemCount = async () => {
+      if (user) {
+        try {
+          const response = await api.get('/cart');
+          setCartItemCount(response.data.items.length);
+        } catch (error) {
+          console.error('Error fetching cart:', error);
+        }
+      }
+    };
+
+    fetchCartItemCount();
+  }, [user]);
 
   return (
     <AppBar position="static">
@@ -28,6 +41,11 @@ const Navbar = () => {
               </IconButton>
               <IconButton color="inherit" component={RouterLink} to="/profile">
                 <Person />
+              </IconButton>
+              <IconButton color="inherit" component={RouterLink} to="/cart">
+                <Badge badgeContent={cartItemCount} color="secondary">
+                  <ShoppingCart />
+                </Badge>
               </IconButton>
               {user.role === 'vendor' && (
                 <>

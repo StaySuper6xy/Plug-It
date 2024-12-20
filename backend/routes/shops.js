@@ -96,19 +96,18 @@ router.put('/:id', auth, async (req, res) => {
     name, 
     description, 
     address, 
-    latitude, 
-    longitude, 
+    location,
     isPublic,
     isOpen,
     fulfillmentOptions,
-    deliveryArea,
+    availabilityArea,
     estimatedResponseTime,
     motd,
     status
   } = req.body;
 
   console.log('Updating shop:', req.params.id);
-  console.log('Update data:', req.body);
+  console.log('Update data:', JSON.stringify(req.body, null, 2));
 
   try {
     let shop = await Shop.findById(req.params.id);
@@ -123,35 +122,52 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(401).json({ msg: 'User not authorized' });
     }
 
-    // Only update fields that are provided
+    // Update fields
     if (name) shop.name = name;
     if (description) shop.description = description;
     if (address) shop.address = address;
-    if (latitude && longitude) {
+    if (location && location.coordinates) {
       shop.location = {
         type: 'Point',
-        coordinates: [parseFloat(longitude), parseFloat(latitude)]
+        coordinates: [Number(location.coordinates[0]), Number(location.coordinates[1])]
       };
     }
     if (isPublic !== undefined) shop.isPublic = isPublic;
     if (isOpen !== undefined) shop.isOpen = isOpen;
     if (fulfillmentOptions) shop.fulfillmentOptions = fulfillmentOptions;
-    if (deliveryArea) {
-      shop.deliveryArea = {
-        type: deliveryArea.type,
-        ...(deliveryArea.type === 'Polygon' 
-          ? { coordinates: deliveryArea.coordinates } 
-          : { center: deliveryArea.center, radius: deliveryArea.radius })
-      };
+    
+    if (availabilityArea) {
+      if (availabilityArea.type === 'Circle') {
+        shop.availabilityArea = {
+          type: 'Circle',
+          center: {
+            type: 'Point',
+            coordinates: [Number(availabilityArea.center.coordinates[0]), Number(availabilityArea.center.coordinates[1])]
+          },
+          radius: Number(availabilityArea.radius)
+        };
+      } else if (availabilityArea.type === 'Polygon') {
+        shop.availabilityArea = {
+          type: 'Polygon',
+          coordinates: [availabilityArea.coordinates[0].map(coord => coord.map(Number))]
+        };
+      }
+    } else if (!fulfillmentOptions.delivery && !fulfillmentOptions.meetup) {
+      // If delivery and meetup are both false, remove availabilityArea
+      shop.availabilityArea = undefined;
     }
+    
     if (estimatedResponseTime) shop.estimatedResponseTime = estimatedResponseTime;
     if (motd !== undefined) shop.motd = motd;
     if (status) shop.status = status;
 
-    console.log('Saving updated shop:', shop);
-    await shop.save();
+    console.log('Shop to be saved:', JSON.stringify(shop.toObject(), null, 2));
+    
+    // Use save() instead of findOneAndUpdate to ensure Mongoose validations are run
+    const updatedShop = await shop.save();
+
     console.log('Shop updated successfully');
-    res.json(shop);
+    res.json(updatedShop);
   } catch (err) {
     console.error('Error updating shop:', err);
     res.status(500).json({ message: 'Server Error', error: err.message });

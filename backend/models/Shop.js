@@ -1,5 +1,25 @@
 const mongoose = require('mongoose');
 
+const PointSchema = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ['Point'],
+    required: true
+  },
+  coordinates: {
+    type: [Number],
+    required: true,
+    validate: {
+      validator: function(v) {
+        return v.length === 2 && 
+               typeof v[0] === 'number' && 
+               typeof v[1] === 'number';
+      },
+      message: props => `${props.value} is not a valid location coordinate!`
+    }
+  }
+});
+
 const ShopSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -15,15 +35,9 @@ const ShopSchema = new mongoose.Schema({
     default: ''
   },
   location: {
-    type: {
-      type: String,
-      enum: ['Point'],
-      default: 'Point'
-    },
-    coordinates: {
-      type: [Number],
-      default: [0, 0]
-    }
+    type: PointSchema,
+    required: true,
+    index: '2dsphere'
   },
   isPublic: {
     type: Boolean,
@@ -47,32 +61,57 @@ const ShopSchema = new mongoose.Schema({
     delivery: { type: Boolean, default: false },
     meetup: { type: Boolean, default: false }
   },
-  deliveryArea: {
+  availabilityArea: {
     type: {
       type: String,
       enum: ['Polygon', 'Circle'],
-      required: function() { return this.fulfillmentOptions.delivery || this.fulfillmentOptions.meetup; }
+      required: function() { 
+        return this.fulfillmentOptions && (this.fulfillmentOptions.delivery || this.fulfillmentOptions.meetup);
+      }
     },
     coordinates: {
-      type: [[[Number]]], // For Polygon
-      required: function() { return this.deliveryArea && this.deliveryArea.type === 'Polygon'; }
+      type: [[[Number]]],
+      required: function() { 
+        return this.availabilityArea && this.availabilityArea.type === 'Polygon';
+      },
+      validate: {
+        validator: function(v) {
+          return Array.isArray(v) && v.length > 0 && 
+                 v[0].every(coord => Array.isArray(coord) && coord.length === 2 &&
+                 typeof coord[0] === 'number' && typeof coord[1] === 'number');
+        },
+        message: props => `${props.value} is not a valid polygon coordinate array!`
+      }
     },
     center: {
-      type: [Number], // For Circle
-      required: function() { return this.deliveryArea && this.deliveryArea.type === 'Circle'; }
+      type: {
+        type: String,
+        enum: ['Point'],
+        required: function() { 
+          return this.availabilityArea && this.availabilityArea.type === 'Circle';
+        }
+      },
+      coordinates: {
+        type: [Number],
+        required: function() { 
+          return this.availabilityArea && this.availabilityArea.type === 'Circle';
+        },
+        validate: {
+          validator: function(v) {
+            return Array.isArray(v) && v.length === 2 &&
+                   typeof v[0] === 'number' && typeof v[1] === 'number';
+          },
+          message: props => `${props.value} is not a valid point coordinate!`
+        }
+      }
     },
     radius: {
-      type: Number, // For Circle, in meters
-      required: function() { return this.deliveryArea && this.deliveryArea.type === 'Circle'; }
+      type: Number,
+      required: function() { 
+        return this.availabilityArea && this.availabilityArea.type === 'Circle';
+      },
+      min: 0
     }
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   },
   estimatedResponseTime: {
     type: Number,
@@ -89,7 +128,6 @@ const ShopSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-ShopSchema.index({ location: '2dsphere' });
-ShopSchema.index({ 'deliveryArea.coordinates': '2dsphere' });
+ShopSchema.index({ 'availabilityArea.coordinates': '2dsphere' });
 
 module.exports = mongoose.model('Shop', ShopSchema);
