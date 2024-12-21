@@ -6,6 +6,7 @@ const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
+const gjv = require('geojson-validation');
 
 // Set up multer for handling file uploads
 const storage = multer.diskStorage({
@@ -126,12 +127,14 @@ router.put('/:id', auth, async (req, res) => {
     if (name) shop.name = name;
     if (description) shop.description = description;
     if (address) shop.address = address;
+    
     if (location && location.coordinates) {
       shop.location = {
         type: 'Point',
-        coordinates: [Number(location.coordinates[0]), Number(location.coordinates[1])]
+        coordinates: location.coordinates.map(Number)
       };
     }
+    
     if (isPublic !== undefined) shop.isPublic = isPublic;
     if (isOpen !== undefined) shop.isOpen = isOpen;
     if (fulfillmentOptions) shop.fulfillmentOptions = fulfillmentOptions;
@@ -140,10 +143,7 @@ router.put('/:id', auth, async (req, res) => {
       if (availabilityArea.type === 'Circle') {
         shop.availabilityArea = {
           type: 'Circle',
-          center: {
-            type: 'Point',
-            coordinates: [Number(availabilityArea.center.coordinates[0]), Number(availabilityArea.center.coordinates[1])]
-          },
+          center: availabilityArea.center.map(Number),
           radius: Number(availabilityArea.radius)
         };
       } else if (availabilityArea.type === 'Polygon') {
@@ -151,6 +151,8 @@ router.put('/:id', auth, async (req, res) => {
           type: 'Polygon',
           coordinates: [availabilityArea.coordinates[0].map(coord => coord.map(Number))]
         };
+      } else {
+        return res.status(400).json({ message: 'Invalid availabilityArea type' });
       }
     } else if (!fulfillmentOptions.delivery && !fulfillmentOptions.meetup) {
       // If delivery and meetup are both false, remove availabilityArea
@@ -161,16 +163,16 @@ router.put('/:id', auth, async (req, res) => {
     if (motd !== undefined) shop.motd = motd;
     if (status) shop.status = status;
 
-    console.log('Shop to be saved:', JSON.stringify(shop.toObject(), null, 2));
-    
-    // Use save() instead of findOneAndUpdate to ensure Mongoose validations are run
-    const updatedShop = await shop.save();
+    // Ensure deliveryArea is removed
+    shop.deliveryArea = undefined;
 
+    console.log('Attempting to save shop:', JSON.stringify(shop.toObject(), null, 2));
+    const updatedShop = await shop.save();
     console.log('Shop updated successfully');
     res.json(updatedShop);
   } catch (err) {
     console.error('Error updating shop:', err);
-    res.status(500).json({ message: 'Server Error', error: err.message });
+    res.status(400).json({ message: 'Update failed', error: err.message });
   }
 });
 

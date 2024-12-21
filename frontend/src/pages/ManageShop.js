@@ -4,7 +4,7 @@ import {
   Container, Typography, Button, TextField, Card, CardContent, CardActions, 
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, 
   Tabs, Tab, Box, FormControl, InputLabel, Select, MenuItem, FormGroup, FormControlLabel, Checkbox,
-  Paper, Snackbar, Alert
+  Paper
 } from '@mui/material';
 import { MapContainer, TileLayer, Circle, Polygon, FeatureGroup } from 'react-leaflet';
 import { EditControl } from "react-leaflet-draw";
@@ -27,8 +27,7 @@ const ManageShop = () => {
   const [availabilityRadius, setAvailabilityRadius] = useState(1000); // 1km default
   const [availabilityPolygon, setAvailabilityPolygon] = useState([]);
   const [mapCenter, setMapCenter] = useState([0, 0]);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  //const [isOpen, setIsOpen] = useState(false);
   const [fulfillmentOptions, setFulfillmentOptions] = useState({
     pickup: false,
     delivery: false,
@@ -64,6 +63,15 @@ const ManageShop = () => {
           meetup: false
         });
         setMotd(response.data[0].motd || '');
+        if (response.data[0].availabilityArea) {
+          setAvailabilityAreaType(response.data[0].availabilityArea.type);
+          if (response.data[0].availabilityArea.type === 'Circle') {
+            setAvailabilityRadius(response.data[0].availabilityArea.radius);
+            setMapCenter(response.data[0].availabilityArea.center);
+          } else if (response.data[0].availabilityArea.type === 'Polygon') {
+            setAvailabilityPolygon(response.data[0].availabilityArea.coordinates[0]);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching shops:', error);
@@ -83,18 +91,15 @@ const ManageShop = () => {
 
   const handleSaveEdit = async () => {
     try {
-      let updatedAvailabilityArea;
+      let availabilityArea;
       if (availabilityAreaType === 'Circle') {
-        updatedAvailabilityArea = {
+        availabilityArea = {
           type: 'Circle',
-          center: {
-            type: 'Point',
-            coordinates: mapCenter.map(Number)
-          },
+          center: mapCenter.map(Number),
           radius: Number(availabilityRadius)
         };
-      } else {
-        updatedAvailabilityArea = {
+      } else if (availabilityAreaType === 'Polygon') {
+        availabilityArea = {
           type: 'Polygon',
           coordinates: [availabilityPolygon.map(coord => coord.map(Number))]
         };
@@ -102,26 +107,24 @@ const ManageShop = () => {
 
       const updatedShop = {
         ...editedShop,
+        fulfillmentOptions,
+        availabilityArea,
+        motd,
+        status,
         location: {
           type: 'Point',
           coordinates: mapCenter.map(Number)
-        },
-        availabilityArea: updatedAvailabilityArea,
-        motd,
-        status
+        }
       };
-
-      console.log('Saving edited shop:', JSON.stringify(updatedShop, null, 2));
+      
+      console.log('Saving edited shop:', updatedShop);
       const response = await api.put(`/shops/${updatedShop._id}`, updatedShop);
       console.log('Shop edit response:', response.data);
       setIsEditing(false);
-      setSnackbarOpen(true);
-      setSnackbarMessage('Shop updated successfully');
       fetchShops();
     } catch (error) {
-      console.error('Error updating shop:', error);
-      setSnackbarOpen(true);
-      setSnackbarMessage(`Failed to update shop: ${error.response?.data?.message || error.message}`);
+      console.error('Error updating shop:', error.response?.data || error);
+      // Add error handling here, e.g., show an error message to the user
     }
   };
 
@@ -203,7 +206,7 @@ const ManageShop = () => {
     if (layerType === 'circle') {
       setAvailabilityAreaType('Circle');
       setAvailabilityRadius(layer.getRadius());
-      setMapCenter([layer.getLatLng().lng, layer.getLatLng().lat]);
+      setMapCenter([layer.getLatLng().lat, layer.getLatLng().lng]);
     } else if (layerType === 'polygon') {
       setAvailabilityAreaType('Polygon');
       setAvailabilityPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lng, latLng.lat]));
@@ -215,7 +218,7 @@ const ManageShop = () => {
     layers.eachLayer((layer) => {
       if (layer instanceof LCircle) {
         setAvailabilityRadius(layer.getRadius());
-        setMapCenter([layer.getLatLng().lng, layer.getLatLng().lat]);
+        setMapCenter([layer.getLatLng().lat, layer.getLatLng().lng]);
       } else if (layer instanceof LPolygon) {
         setAvailabilityPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lng, latLng.lat]));
       }
@@ -440,16 +443,6 @@ const ManageShop = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSnackbarOpen(false)} severity="success" sx={{ width: '100%' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
     </Container>
   );
 };
