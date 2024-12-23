@@ -7,6 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const gjv = require('geojson-validation');
+const { isValidCoordinates, isValidPolygon, isValidCircle } = require('../utils/validation');
 
 // Set up multer for handling file uploads
 const storage = multer.diskStorage({
@@ -107,20 +108,14 @@ router.put('/:id', auth, async (req, res) => {
     status
   } = req.body;
 
-  console.log('Updating shop:', req.params.id);
-  console.log('Update data:', JSON.stringify(req.body, null, 2));
-
   try {
     let shop = await Shop.findById(req.params.id);
     if (!shop) {
-      console.log('Shop not found:', req.params.id);
-      return res.status(404).json({ msg: 'Shop not found' });
+      return res.status(404).json({ message: 'Shop not found' });
     }
 
-    // Check user
     if (shop.owner.toString() !== req.user.id) {
-      console.log('User not authorized:', req.user.id);
-      return res.status(401).json({ msg: 'User not authorized' });
+      return res.status(401).json({ message: 'User not authorized' });
     }
 
     // Update fields
@@ -128,10 +123,16 @@ router.put('/:id', auth, async (req, res) => {
     if (description) shop.description = description;
     if (address) shop.address = address;
     
-    if (location && location.coordinates) {
+    if (location && location.type === 'Point' && Array.isArray(location.coordinates)) {
+      if (!isValidCoordinates(location.coordinates)) {
+        return res.status(400).json({ message: 'Invalid location format' });
+      }
       shop.location = {
         type: 'Point',
-        coordinates: location.coordinates.map(Number)
+        coordinates: [
+          parseFloat(location.coordinates[0]),
+          parseFloat(location.coordinates[1])
+        ]
       };
     }
     
@@ -141,21 +142,26 @@ router.put('/:id', auth, async (req, res) => {
     
     if (availabilityArea) {
       if (availabilityArea.type === 'Circle') {
+        if (!isValidCircle(availabilityArea.center, availabilityArea.radius)) {
+          return res.status(400).json({ message: 'Invalid circle format' });
+        }
         shop.availabilityArea = {
           type: 'Circle',
-          center: availabilityArea.center.map(Number),
-          radius: Number(availabilityArea.radius)
+          center: [parseFloat(availabilityArea.center[0]), parseFloat(availabilityArea.center[1])],
+          radius: parseFloat(availabilityArea.radius)
         };
       } else if (availabilityArea.type === 'Polygon') {
+        if (!isValidPolygon(availabilityArea.coordinates)) {
+          return res.status(400).json({ message: 'Invalid polygon format' });
+        }
         shop.availabilityArea = {
           type: 'Polygon',
-          coordinates: [availabilityArea.coordinates[0].map(coord => coord.map(Number))]
+          coordinates: availabilityArea.coordinates
         };
       } else {
         return res.status(400).json({ message: 'Invalid availabilityArea type' });
       }
-    } else if (!fulfillmentOptions.delivery && !fulfillmentOptions.meetup) {
-      // If delivery and meetup are both false, remove availabilityArea
+    } else {
       shop.availabilityArea = undefined;
     }
     
@@ -163,12 +169,10 @@ router.put('/:id', auth, async (req, res) => {
     if (motd !== undefined) shop.motd = motd;
     if (status) shop.status = status;
 
-    // Ensure deliveryArea is removed
+    // Remove legacy fields
     shop.deliveryArea = undefined;
 
-    console.log('Attempting to save shop:', JSON.stringify(shop.toObject(), null, 2));
     const updatedShop = await shop.save();
-    console.log('Shop updated successfully');
     res.json(updatedShop);
   } catch (err) {
     console.error('Error updating shop:', err);

@@ -18,11 +18,21 @@ const ShopSchema = new mongoose.Schema({
     type: {
       type: String,
       enum: ['Point'],
-      default: 'Point'
+      required: true
     },
     coordinates: {
       type: [Number],
-      default: [0, 0]
+      required: true,
+      validate: {
+        validator: function(v) {
+          return v.length === 2 && 
+                 typeof v[0] === 'number' && 
+                 typeof v[1] === 'number' &&
+                 v[0] >= -180 && v[0] <= 180 &&
+                 v[1] >= -90 && v[1] <= 90;
+        },
+        message: props => `${props.value} is not a valid location coordinate!`
+      }
     }
   },
   isPublic: {
@@ -55,24 +65,29 @@ const ShopSchema = new mongoose.Schema({
     },
     coordinates: {
       type: [[[Number]]], // For Polygon
-      required: function() { return this.availabilityArea && this.availabilityArea.type === 'Polygon'; }
+      required: function() { return this.availabilityArea && this.availabilityArea.type === 'Polygon'; },
+      validate: {
+        validator: function(v) {
+          return v && v.length > 0 && v[0].length >= 4 && v[0][0][0] === v[0][v[0].length-1][0] && v[0][0][1] === v[0][v[0].length-1][1];
+        },
+        message: props => `${props.value} is not a valid polygon`
+      }
     },
     center: {
       type: [Number], // For Circle
-      required: function() { return this.availabilityArea && this.availabilityArea.type === 'Circle'; }
+      required: function() { return this.availabilityArea && this.availabilityArea.type === 'Circle'; },
+      validate: {
+        validator: function(v) {
+          return v && v.length === 2 && v[0] >= -180 && v[0] <= 180 && v[1] >= -90 && v[1] <= 90;
+        },
+        message: props => `${props.value} is not a valid center coordinate`
+      }
     },
     radius: {
       type: Number, // For Circle, in meters
-      required: function() { return this.availabilityArea && this.availabilityArea.type === 'Circle'; }
+      required: function() { return this.availabilityArea && this.availabilityArea.type === 'Circle'; },
+      min: [0, 'Radius must be positive']
     }
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   },
   estimatedResponseTime: {
     type: Number,
@@ -91,5 +106,6 @@ const ShopSchema = new mongoose.Schema({
 
 ShopSchema.index({ location: '2dsphere' });
 ShopSchema.index({ 'availabilityArea.coordinates': '2dsphere' });
+ShopSchema.index({ 'availabilityArea.center': '2dsphere' });
 
 module.exports = mongoose.model('Shop', ShopSchema);

@@ -13,6 +13,7 @@ import api from '../utils/api';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import { Circle as LCircle, Polygon as LPolygon } from 'leaflet';
+import { isValidCoordinates, isValidPolygon } from '../utils/validation';
 
 const ManageShop = () => {
   const [shops, setShops] = useState([]);
@@ -27,7 +28,6 @@ const ManageShop = () => {
   const [availabilityRadius, setAvailabilityRadius] = useState(1000); // 1km default
   const [availabilityPolygon, setAvailabilityPolygon] = useState([]);
   const [mapCenter, setMapCenter] = useState([0, 0]);
-  //const [isOpen, setIsOpen] = useState(false);
   const [fulfillmentOptions, setFulfillmentOptions] = useState({
     pickup: false,
     delivery: false,
@@ -93,16 +93,30 @@ const ManageShop = () => {
     try {
       let availabilityArea;
       if (availabilityAreaType === 'Circle') {
+        const center = mapCenter.map(coord => parseFloat(coord));
+        const radius = parseFloat(availabilityRadius);
+        if (!isValidCoordinates(center) || isNaN(radius) || radius <= 0) {
+          throw new Error('Invalid circle format for availability area');
+        }
         availabilityArea = {
           type: 'Circle',
-          center: mapCenter.map(Number),
-          radius: Number(availabilityRadius)
+          center: center,
+          radius: radius
         };
       } else if (availabilityAreaType === 'Polygon') {
+        let coordinates = availabilityPolygon.map(coord => coord.map(parseFloat));
+        if (!isValidPolygon([coordinates])) {
+          throw new Error('Invalid polygon format for availability area');
+        }
         availabilityArea = {
           type: 'Polygon',
-          coordinates: [availabilityPolygon.map(coord => coord.map(Number))]
+          coordinates: [coordinates]
         };
+      }
+
+      const location = mapCenter.map(coord => parseFloat(coord));
+      if (!isValidCoordinates(location)) {
+        throw new Error('Invalid shop location coordinates');
       }
 
       const updatedShop = {
@@ -113,18 +127,25 @@ const ManageShop = () => {
         status,
         location: {
           type: 'Point',
-          coordinates: mapCenter.map(Number)
+          coordinates: location
         }
       };
       
-      console.log('Saving edited shop:', updatedShop);
+      // Remove any legacy fields
+      delete updatedShop.deliveryArea;
+      
+      console.log('Saving edited shop:', JSON.stringify(updatedShop, null, 2));
       const response = await api.put(`/shops/${updatedShop._id}`, updatedShop);
       console.log('Shop edit response:', response.data);
       setIsEditing(false);
       fetchShops();
     } catch (error) {
-      console.error('Error updating shop:', error.response?.data || error);
-      // Add error handling here, e.g., show an error message to the user
+      console.error('Error updating shop:', error);
+      if (error.response && error.response.data && error.response.data.error) {
+        alert(`Failed to update shop: ${error.response.data.error}`);
+      } else {
+        alert(`Failed to update shop: ${error.message || 'Unknown error'}`);
+      }
     }
   };
 
