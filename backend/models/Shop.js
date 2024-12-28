@@ -101,6 +101,12 @@ const ShopSchema = new mongoose.Schema({
     type: String,
     enum: ['open', 'closed', 'busy'],
     default: 'closed'
+  },
+  encryptedAvailabilityArea: {
+    type: String
+  },
+  publicKey: {
+    type: String
   }
 }, { timestamps: true });
 

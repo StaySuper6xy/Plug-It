@@ -4,7 +4,7 @@ import {
   Container, Typography, Button, TextField, Card, CardContent, CardActions, 
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, 
   Tabs, Tab, Box, FormControl, InputLabel, Select, MenuItem, FormGroup, FormControlLabel, Checkbox,
-  Paper
+  Paper, Snackbar, Alert
 } from '@mui/material';
 import { MapContainer, TileLayer, Circle, Polygon, FeatureGroup } from 'react-leaflet';
 import { EditControl } from "react-leaflet-draw";
@@ -13,7 +13,8 @@ import api from '../utils/api';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import { Circle as LCircle, Polygon as LPolygon } from 'leaflet';
-import { isValidCoordinates, isValidPolygon } from '../utils/validation';
+import { isValidCoordinates, isValidPolygon, isValidCircle } from '../utils/validation';
+import { generateKey, encryptAvailabilityArea, decryptAvailabilityArea } from '../utils/encryption';
 
 const ManageShop = () => {
   const [shops, setShops] = useState([]);
@@ -35,6 +36,8 @@ const ManageShop = () => {
   });
   const [motd, setMotd] = useState('');
   const [status, setStatus] = useState('closed');
+  const [keys, setKeys] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '' });
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const mapRef = useRef();
@@ -47,34 +50,85 @@ const ManageShop = () => {
     }
   }, [user, navigate]);
 
+  useEffect(() => {
+    if (selectedShop) {
+      const storedKey = localStorage.getItem(`shop_${selectedShop._id}_key`);
+      if (storedKey) {
+        console.log('Retrieved stored key for shop:', selectedShop._id, storedKey);
+        setKeys(storedKey);
+      } else {
+        const newKey = generateKey();
+        console.log('Generated new key for shop:', selectedShop._id, newKey);
+        setKeys(newKey);
+        localStorage.setItem(`shop_${selectedShop._id}_key`, newKey);
+      }
+    }
+  }, [selectedShop]);
+
   const fetchShops = async () => {
     try {
       console.log('Fetching shops...');
       const response = await api.get('/shops');
       console.log('Shops fetched:', response.data);
-      setShops(response.data);
-      if (response.data.length > 0) {
-        setSelectedShop(response.data[0]);
-        setMapCenter(response.data[0].location.coordinates.reverse());
-        setStatus(response.data[0].status || 'closed');
-        setFulfillmentOptions(response.data[0].fulfillmentOptions || {
+      const decryptedShops = await Promise.all(response.data.map(async (shop) => {
+        if (shop.encryptedAvailabilityArea) {
+          const storedKey = localStorage.getItem(`shop_${shop._id}_key`);
+          if (storedKey) {
+            console.log('Using key for shop:', shop._id, storedKey);
+            try {
+              const decryptedArea = decryptAvailabilityArea(shop.encryptedAvailabilityArea, storedKey);
+              if (decryptedArea) {
+                console.log('Successfully decrypted area for shop:', shop._id, decryptedArea);
+                return { ...shop, availabilityArea: decryptedArea };
+              } else {
+                console.error('Failed to decrypt area for shop:', shop._id);
+                return { ...shop, availabilityArea: null };
+              }
+            } catch (error) {
+              console.error('Error decrypting availability area:', error);
+              return { ...shop, availabilityArea: null };
+            }
+          } else {
+            console.error('No key found for shop:', shop._id);
+            const newKey = generateKey();
+            console.log('Generated new key for shop:', shop._id, newKey);
+            localStorage.setItem(`shop_${shop._id}_key`, newKey);
+            return shop;
+          }
+        } else {
+          console.log('No encrypted availability area for shop:', shop._id);
+          return shop;
+        }
+      }));
+      setShops(decryptedShops);
+      if (decryptedShops.length > 0) {
+        setSelectedShop(decryptedShops[0]);
+        setMapCenter(decryptedShops[0].location.coordinates.slice().reverse());
+        setStatus(decryptedShops[0].status || 'closed');
+        setFulfillmentOptions(decryptedShops[0].fulfillmentOptions || {
           pickup: false,
           delivery: false,
           meetup: false
         });
-        setMotd(response.data[0].motd || '');
-        if (response.data[0].availabilityArea) {
-          setAvailabilityAreaType(response.data[0].availabilityArea.type);
-          if (response.data[0].availabilityArea.type === 'Circle') {
-            setAvailabilityRadius(response.data[0].availabilityArea.radius);
-            setMapCenter(response.data[0].availabilityArea.center);
-          } else if (response.data[0].availabilityArea.type === 'Polygon') {
-            setAvailabilityPolygon(response.data[0].availabilityArea.coordinates[0]);
+        setMotd(decryptedShops[0].motd || '');
+        if (decryptedShops[0].availabilityArea) {
+          setAvailabilityAreaType(decryptedShops[0].availabilityArea.type);
+          if (decryptedShops[0].availabilityArea.type === 'Circle') {
+            setAvailabilityRadius(decryptedShops[0].availabilityArea.radius);
+            setMapCenter(decryptedShops[0].availabilityArea.center);
+          } else if (decryptedShops[0].availabilityArea.type === 'Polygon') {
+            setAvailabilityPolygon(decryptedShops[0].availabilityArea.coordinates[0]);
           }
+        } else {
+          console.log('Using default availability area settings');
+          setAvailabilityAreaType('Circle');
+          setAvailabilityRadius(1000);
+          setMapCenter(decryptedShops[0].location.coordinates.slice().reverse());
         }
       }
     } catch (error) {
       console.error('Error fetching shops:', error);
+      setSnackbar({ open: true, message: 'Error fetching shops. Please try again.' });
     }
   };
 
@@ -92,12 +146,18 @@ const ManageShop = () => {
   const handleSaveEdit = async () => {
     try {
       let availabilityArea;
+      console.log('Saving availability area:', { type: availabilityAreaType, center: mapCenter, radius: availabilityRadius });
       if (availabilityAreaType === 'Circle') {
         const center = mapCenter.map(coord => parseFloat(coord));
         const radius = parseFloat(availabilityRadius);
-        if (!isValidCoordinates(center) || isNaN(radius) || radius <= 0) {
+        
+        console.log('Parsed circle data:', { center, radius });
+        
+        if (!isValidCircle(center, radius)) {
+          console.error('Invalid circle data:', { center, radius });
           throw new Error('Invalid circle format for availability area');
         }
+        
         availabilityArea = {
           type: 'Circle',
           center: center,
@@ -114,38 +174,54 @@ const ManageShop = () => {
         };
       }
 
+      if (!keys) {
+        const storedKey = localStorage.getItem(`shop_${editedShop._id}_key`);
+        if (storedKey) {
+          console.log('Retrieved stored key for shop:', editedShop._id, storedKey);
+          setKeys(storedKey);
+        } else {
+          const newKey = generateKey();
+          console.log('Generated new key for shop:', editedShop._id, newKey);
+          setKeys(newKey);
+          localStorage.setItem(`shop_${editedShop._id}_key`, newKey);
+        }
+      }
+
+      console.log('Using key for encryption:', keys);
+      const encryptedAvailabilityArea = encryptAvailabilityArea(availabilityArea, keys);
+
       const location = mapCenter.map(coord => parseFloat(coord));
+      console.log('Shop location coordinates:', location);
       if (!isValidCoordinates(location)) {
+        console.error('Invalid shop location coordinates:', location);
         throw new Error('Invalid shop location coordinates');
       }
 
       const updatedShop = {
         ...editedShop,
         fulfillmentOptions,
-        availabilityArea,
+        encryptedAvailabilityArea,
         motd,
         status,
         location: {
           type: 'Point',
-          coordinates: location
+          coordinates: [location[1], location[0]] // Ensure [longitude, latitude] order
         }
       };
       
       // Remove any legacy fields
+      delete updatedShop.availabilityArea;
       delete updatedShop.deliveryArea;
       
       console.log('Saving edited shop:', JSON.stringify(updatedShop, null, 2));
       const response = await api.put(`/shops/${updatedShop._id}`, updatedShop);
       console.log('Shop edit response:', response.data);
       setIsEditing(false);
-      fetchShops();
+      setSnackbar({ open: true, message: 'Shop updated successfully' });
+      await fetchShops();
     } catch (error) {
       console.error('Error updating shop:', error);
-      if (error.response && error.response.data && error.response.data.error) {
-        alert(`Failed to update shop: ${error.response.data.error}`);
-      } else {
-        alert(`Failed to update shop: ${error.message || 'Unknown error'}`);
-      }
+      setSnackbar({ open: true, message: `Failed to update shop: ${error.message || 'Unknown error'}` });
     }
   };
 
@@ -226,8 +302,8 @@ const ManageShop = () => {
     const { layerType, layer } = e;
     if (layerType === 'circle') {
       setAvailabilityAreaType('Circle');
-      setAvailabilityRadius(layer.getRadius());
-      setMapCenter([layer.getLatLng().lat, layer.getLatLng().lng]);
+      setAvailabilityRadius(parseFloat(layer.getRadius().toFixed(2)));
+      setMapCenter([parseFloat(layer.getLatLng().lat.toFixed(6)), parseFloat(layer.getLatLng().lng.toFixed(6))]);
     } else if (layerType === 'polygon') {
       setAvailabilityAreaType('Polygon');
       setAvailabilityPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lng, latLng.lat]));
@@ -238,8 +314,8 @@ const ManageShop = () => {
     const { layers } = e;
     layers.eachLayer((layer) => {
       if (layer instanceof LCircle) {
-        setAvailabilityRadius(layer.getRadius());
-        setMapCenter([layer.getLatLng().lat, layer.getLatLng().lng]);
+        setAvailabilityRadius(parseFloat(layer.getRadius().toFixed(2)));
+        setMapCenter([parseFloat(layer.getLatLng().lat.toFixed(6)), parseFloat(layer.getLatLng().lng.toFixed(6))]);
       } else if (layer instanceof LPolygon) {
         setAvailabilityPolygon(layer.getLatLngs()[0].map(latLng => [latLng.lng, latLng.lat]));
       }
@@ -464,6 +540,11 @@ const ManageShop = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity="success" sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

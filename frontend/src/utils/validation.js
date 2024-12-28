@@ -1,11 +1,41 @@
 export const isValidCoordinates = (coords) => {
-  return Array.isArray(coords) && 
-         coords.length === 2 &&
-         typeof coords[0] === 'number' && 
-         typeof coords[1] === 'number' &&
-         !isNaN(coords[0]) && !isNaN(coords[1]) &&
-         coords[0] >= -180 && coords[0] <= 180 &&
-         coords[1] >= -90 && coords[1] <= 90;
+  console.log('Validating coordinates:', coords);
+  if (!Array.isArray(coords) || coords.length !== 2) {
+    console.log('Invalid coordinates format');
+    return false;
+  }
+  
+  const [lat, lng] = coords;
+  
+  if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+    console.log('Invalid latitude or longitude type');
+    return false;
+  }
+  
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    console.log('Latitude or longitude out of range');
+    return false;
+  }
+  
+  console.log('Coordinates are valid');
+  return true;
+};
+
+export const isValidCircle = (center, radius) => {
+  console.log('Validating circle:', { center, radius });
+  
+  if (!isValidCoordinates(center)) {
+    console.log('Invalid center format');
+    return false;
+  }
+  
+  if (typeof radius !== 'number' || isNaN(radius) || radius <= 0) {
+    console.log('Invalid radius');
+    return false;
+  }
+  
+  console.log('Circle is valid');
+  return true;
 };
 
 export const isValidPolygon = (coordinates) => {
@@ -16,10 +46,6 @@ export const isValidPolygon = (coordinates) => {
          coordinates[0].every(isValidCoordinates) &&
          coordinates[0][0][0] === coordinates[0][coordinates[0].length - 1][0] &&
          coordinates[0][0][1] === coordinates[0][coordinates[0].length - 1][1];
-};
-
-export const isValidCircle = (center, radius) => {
-  return isValidCoordinates(center) && typeof radius === 'number' && radius > 0;
 };
 
 export const validateShopData = (shopData) => {

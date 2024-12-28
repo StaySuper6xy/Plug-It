@@ -94,21 +94,9 @@ router.get('/:id', async (req, res) => {
 
 // Update shop
 router.put('/:id', auth, async (req, res) => {
-  const { 
-    name, 
-    description, 
-    address, 
-    location,
-    isPublic,
-    isOpen,
-    fulfillmentOptions,
-    availabilityArea,
-    estimatedResponseTime,
-    motd,
-    status
-  } = req.body;
-
   try {
+    const { encryptedAvailabilityArea, publicKey, ...otherFields } = req.body;
+    
     let shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ message: 'Shop not found' });
@@ -119,58 +107,15 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     // Update fields
-    if (name) shop.name = name;
-    if (description) shop.description = description;
-    if (address) shop.address = address;
+    Object.assign(shop, otherFields);
     
-    if (location && location.type === 'Point' && Array.isArray(location.coordinates)) {
-      if (!isValidCoordinates(location.coordinates)) {
-        return res.status(400).json({ message: 'Invalid location format' });
-      }
-      shop.location = {
-        type: 'Point',
-        coordinates: [
-          parseFloat(location.coordinates[0]),
-          parseFloat(location.coordinates[1])
-        ]
-      };
+    if (encryptedAvailabilityArea) {
+      shop.encryptedAvailabilityArea = encryptedAvailabilityArea;
     }
     
-    if (isPublic !== undefined) shop.isPublic = isPublic;
-    if (isOpen !== undefined) shop.isOpen = isOpen;
-    if (fulfillmentOptions) shop.fulfillmentOptions = fulfillmentOptions;
-    
-    if (availabilityArea) {
-      if (availabilityArea.type === 'Circle') {
-        if (!isValidCircle(availabilityArea.center, availabilityArea.radius)) {
-          return res.status(400).json({ message: 'Invalid circle format' });
-        }
-        shop.availabilityArea = {
-          type: 'Circle',
-          center: [parseFloat(availabilityArea.center[0]), parseFloat(availabilityArea.center[1])],
-          radius: parseFloat(availabilityArea.radius)
-        };
-      } else if (availabilityArea.type === 'Polygon') {
-        if (!isValidPolygon(availabilityArea.coordinates)) {
-          return res.status(400).json({ message: 'Invalid polygon format' });
-        }
-        shop.availabilityArea = {
-          type: 'Polygon',
-          coordinates: availabilityArea.coordinates
-        };
-      } else {
-        return res.status(400).json({ message: 'Invalid availabilityArea type' });
-      }
-    } else {
-      shop.availabilityArea = undefined;
+    if (publicKey) {
+      shop.publicKey = publicKey;
     }
-    
-    if (estimatedResponseTime) shop.estimatedResponseTime = estimatedResponseTime;
-    if (motd !== undefined) shop.motd = motd;
-    if (status) shop.status = status;
-
-    // Remove legacy fields
-    shop.deliveryArea = undefined;
 
     const updatedShop = await shop.save();
     res.json(updatedShop);

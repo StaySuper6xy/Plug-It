@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { AccessTime, Message, LocalShipping, Store, MeetingRoom } from '@mui/icons-material';
 import api from '../utils/api';
+import { decryptAvailabilityArea } from '../utils/encryption';
 
 export default function ShopPage() {
   const { shopId } = useParams();
@@ -31,7 +32,21 @@ export default function ShopPage() {
           api.get(`/shops/${shopId}`),
           api.get(`/shops/${shopId}/products`)
         ]);
-        setShop(shopResponse.data);
+        
+        let shopData = shopResponse.data;
+        if (shopData.encryptedAvailabilityArea) {
+          const keys = JSON.parse(localStorage.getItem(`shop_${shopId}_keys`));
+          if (keys) {
+            try {
+              const decryptedArea = decryptAvailabilityArea(shopData.encryptedAvailabilityArea, keys.privateKey);
+              shopData = { ...shopData, availabilityArea: decryptedArea };
+            } catch (error) {
+              console.error('Error decrypting availability area:', error);
+            }
+          }
+        }
+        
+        setShop(shopData);
         setProducts(productsResponse.data);
       } catch (error) {
         console.error('Error fetching shop and products:', error);
@@ -60,6 +75,23 @@ export default function ShopPage() {
       </Container>
     );
   }
+
+  const AvailabilityAreaDisplay = ({ availabilityArea }) => {
+    if (!availabilityArea) return null;
+
+    return (
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="h6">Availability Area</Typography>
+        {availabilityArea.type === 'Circle' ? (
+          <Typography>
+            Radius: {availabilityArea.radius} meters from the shop location
+          </Typography>
+        ) : (
+          <Typography>Custom polygon area defined</Typography>
+        )}
+      </Box>
+    );
+  };
 
   return (
     <Box sx={{ 
@@ -137,6 +169,8 @@ export default function ShopPage() {
           </List>
         </Box>
 
+        <AvailabilityAreaDisplay availabilityArea={shop.availabilityArea} />
+
         <Grid container spacing={3}>
           {products.map((product) => (
             <Grid item xs={12} sm={6} md={3} key={product._id}>
@@ -204,4 +238,3 @@ export default function ShopPage() {
     </Box>
   );
 }
-
