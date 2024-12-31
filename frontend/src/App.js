@@ -10,14 +10,14 @@ import Register from './pages/Register';
 import UserDashboard from './pages/UserDashboard';
 import UserProfile from './pages/UserProfile';
 import StoreSetup from './pages/StoreSetup';
-import ManageShop from './pages/ManageShop';
+import ManageShop from './components/ManageShop/ManageShop';
 import ShopPage from './pages/ShopPage';
 import ManageProducts from './pages/ManageProducts';
 import ProductDetail from './pages/ProductDetail';
 import Chat from './pages/Chat';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import Cart from './pages/Cart'; // Import the new Cart component
+import Cart from './pages/Cart';
 
 const darkTheme = createTheme({
   palette: {

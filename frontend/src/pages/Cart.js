@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Container, Typography, List, ListItem, ListItemText, 
-  ListItemSecondaryAction, IconButton, Button, TextField, 
-  Box, Snackbar, Alert,
-  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-  Radio, RadioGroup, FormControlLabel
+  Container, Typography, 
+  Snackbar, Alert,
+  Stepper, Step, StepLabel, Paper
 } from '@mui/material';
-import { Delete as DeleteIcon, Add as AddIcon, Remove as RemoveIcon, MyLocation as MyLocationIcon } from '@mui/icons-material';
-import { MapContainer, TileLayer, Marker, Circle, Polygon, useMapEvents } from 'react-leaflet';
 import api from '../utils/api';
 import { decryptAvailabilityArea } from '../utils/encryption';
+import CartContents from './CartContents';
+import FulfillmentOptions from './FulfillmentOptions';
 
 const Cart = () => {
   const [cart, setCart] = useState(null);
@@ -17,11 +15,11 @@ const Cart = () => {
   const [error, setError] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [location, setLocation] = useState(null);
-  const [locationDialog, setLocationDialog] = useState(false);
   const [mapCenter, setMapCenter] = useState([0, 0]);
   const [availabilityArea, setAvailabilityArea] = useState(null);
   const [fulfillmentOption, setFulfillmentOption] = useState('');
   const [shopDetails, setShopDetails] = useState(null);
+  const [activeStep, setActiveStep] = useState(0);
 
   const fetchCart = useCallback(async () => {
     try {
@@ -119,10 +117,6 @@ const Cart = () => {
   };
 
   const handleGetLocation = () => {
-    setLocationDialog(true);
-  };
-
-  const handleConfirmLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -138,28 +132,21 @@ const Cart = () => {
         },
         (error) => {
           console.error('Error getting location:', error);
-          setSnackbar({ open: true, message: 'Failed to get location', severity: 'error' });
-        }
+          let errorMessage = 'Failed to get location';
+          if (error.code === 1) {
+            errorMessage = 'Location access denied. Please enable location services and try again.';
+          } else if (error.code === 2) {
+            errorMessage = 'Unable to determine your location. Please try again or use another method.';
+          } else if (error.code === 3) {
+            errorMessage = 'Location request timed out. Please try again.';
+          }
+          setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       setSnackbar({ open: true, message: 'Geolocation is not supported by your browser', severity: 'error' });
     }
-    setLocationDialog(false);
-  };
-
-  const LocationMarker = () => {
-    useMapEvents({
-      click(e) {
-        const newLocation = e.latlng;
-        if (isWithinAvailabilityArea(newLocation)) {
-          setLocation(newLocation);
-        } else {
-          setSnackbar({ open: true, message: 'Selected location is outside the shop\'s availability area', severity: 'warning' });
-        }
-      },
-    });
-
-    return location ? <Marker position={location} /> : null;
   };
 
   const isWithinAvailabilityArea = (location) => {
@@ -173,6 +160,19 @@ const Cart = () => {
     }
 
     return false;
+  };
+
+  const isPointInPolygon = (point, polygon) => {
+    let isInside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i][1], yi = polygon[i][0];
+      const xj = polygon[j][1], yj = polygon[j][0];
+      
+      const intersect = ((yi > point.lat) !== (yj > point.lat))
+          && (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
+      if (intersect) isInside = !isInside;
+    }
+    return isInside;
   };
 
   const calculateDistance = (point1, point2) => {
@@ -190,23 +190,6 @@ const Cart = () => {
     return R * c; // Distance in meters
   };
 
-  const isPointInPolygon = (point, polygon) => {
-    let isInside = false;
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-      const xi = polygon[i][0], yi = polygon[i][1];
-      const xj = polygon[j][0], yj = polygon[j][1];
-      
-      const intersect = ((yi > point.lat) !== (yj > point.lat))
-          && (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
-      if (intersect) isInside = !isInside;
-    }
-    return isInside;
-  };
-
-  const handleFulfillmentOptionChange = (event) => {
-    setFulfillmentOption(event.target.value);
-    setLocation(null);
-  };
 
   if (loading) {
     return <Typography>Loading cart...</Typography>;
@@ -225,133 +208,43 @@ const Cart = () => {
       <Typography variant="h4" component="h1" gutterBottom>
         Your Cart
       </Typography>
-      <List>
-        {cart.items.map((item) => (
-          <ListItem key={item.product._id}>
-            <ListItemText
-              primary={item.product.name}
-              secondary={`Price: $${item.price.toFixed(2)}`}
-            />
-            <Box display="flex" alignItems="center" mr={2}>
-              <IconButton onClick={() => updateItemQuantity(item.product._id, item.quantity - 1)} disabled={item.quantity <= 1}>
-                <RemoveIcon />
-              </IconButton>
-              <TextField
-                value={item.quantity}
-                onChange={(e) => updateItemQuantity(item.product._id, parseInt(e.target.value) || 1)}
-                type="number"
-                inputProps={{ min: 1 }}
-                style={{ width: 50, margin: '0 8px' }}
-              />
-              <IconButton onClick={() => updateItemQuantity(item.product._id, item.quantity + 1)}>
-                <AddIcon />
-              </IconButton>
-            </Box>
-            <ListItemSecondaryAction>
-              <IconButton edge="end" aria-label="delete" onClick={() => removeItem(item.product._id)}>
-                <DeleteIcon />
-              </IconButton>
-            </ListItemSecondaryAction>
-          </ListItem>
-        ))}
-      </List>
-      <Typography variant="h6" gutterBottom>
-        Total: ${cart.totalAmount.toFixed(2)}
-      </Typography>
-      
-      <Box mt={4}>
-        <Typography variant="h6" gutterBottom>Fulfillment Options</Typography>
-        {shopDetails && shopDetails.fulfillmentOptions ? (
-          <RadioGroup value={fulfillmentOption} onChange={handleFulfillmentOptionChange}>
-            {Object.entries(shopDetails.fulfillmentOptions).map(([option, isAvailable]) => 
-              isAvailable && (
-                <FormControlLabel 
-                  key={option} 
-                  value={option} 
-                  control={<Radio />} 
-                  label={option.charAt(0).toUpperCase() + option.slice(1)} 
-                />
-              )
-            )}
-          </RadioGroup>
+      <Stepper activeStep={activeStep} alternativeLabel>
+        <Step>
+          <StepLabel>Cart Contents</StepLabel>
+        </Step>
+        <Step>
+          <StepLabel>Fulfillment Options</StepLabel>
+        </Step>
+      </Stepper>
+      <Paper elevation={3} sx={{ mt: 3, p: 3 }}>
+        {activeStep === 0 ? (
+          <CartContents
+            cart={cart}
+            updateItemQuantity={updateItemQuantity}
+            removeItem={removeItem}
+            onNext={() => setActiveStep(1)}
+          />
         ) : (
-          <Typography color="error">No fulfillment options available</Typography>
+          <FulfillmentOptions
+            shopDetails={shopDetails}
+            fulfillmentOption={fulfillmentOption}
+            setFulfillmentOption={setFulfillmentOption}
+            location={location}
+            setLocation={setLocation}
+            availabilityArea={availabilityArea}
+            mapCenter={mapCenter}
+            handleGetLocation={handleGetLocation}
+            isWithinAvailabilityArea={isWithinAvailabilityArea}
+            onBack={() => setActiveStep(0)}
+            onCheckout={() => {/* Implement checkout logic */}}
+          />
         )}
-      </Box>
-
-      {(fulfillmentOption === 'delivery' || fulfillmentOption === 'meetup') && (
-        <Box mt={2}>
-          <Button
-            variant="outlined"
-            startIcon={<MyLocationIcon />}
-            onClick={handleGetLocation}
-          >
-            Use Current Location
-          </Button>
-          <Box mt={2} height={300}>
-            <MapContainer 
-              center={mapCenter} 
-              zoom={13} 
-              style={{ height: '100%', width: '100%' }}
-            >
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <LocationMarker />
-              {availabilityArea && availabilityArea.type === 'Circle' && (
-                <Circle 
-                  center={availabilityArea.center} 
-                  radius={availabilityArea.radius} 
-                  pathOptions={{ color: 'blue' }}
-                />
-              )}
-              {availabilityArea && availabilityArea.type === 'Polygon' && (
-                <Polygon 
-                  positions={availabilityArea.coordinates[0]} 
-                  pathOptions={{ color: 'blue' }}
-                />
-              )}
-            </MapContainer>
-          </Box>
-          {location && (
-            <Typography variant="body1" mt={2}>
-              Selected Location: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-            </Typography>
-          )}
-        </Box>
-      )}
-      
-      <Button
-        variant="contained"
-        color="primary"
-        fullWidth
-        style={{ marginTop: 16 }}
-        onClick={() => {/* Implement checkout logic */}}
-        disabled={!fulfillmentOption || ((fulfillmentOption === 'delivery' || fulfillmentOption === 'meetup') && !location)}
-      >
-        Proceed to Checkout
-      </Button>
-      
+      </Paper>
       <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
         <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>
-      <Dialog
-        open={locationDialog}
-        onClose={() => setLocationDialog(false)}
-      >
-        <DialogTitle>Use Current Location</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            This will access your device's location. Do you want to proceed?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLocationDialog(false)}>Cancel</Button>
-          <Button onClick={handleConfirmLocation} color="primary">
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Container>
   );
 };
