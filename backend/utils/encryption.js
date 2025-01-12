@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const forge = require('node-forge');
 
 const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET || 'your-secret-key'; // Use environment variable in production
 
@@ -55,11 +56,63 @@ const decryptShopData = (shopData, key) => {
   };
 };
 
+const generateKeyPair = () => {
+  const keypair = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
+  const publicKey = forge.pki.publicKeyToPem(keypair.publicKey);
+  const privateKey = forge.pki.privateKeyToPem(keypair.privateKey);
+
+  // Convert the public key PEM to a format that can be easily transmitted and stored
+  const publicKeyDer = forge.pki.publicKeyToAsn1(keypair.publicKey);
+  const publicKeyBuffer = forge.asn1.toDer(publicKeyDer).getBytes();
+  const publicKeyHex = forge.util.bytesToHex(publicKeyBuffer);
+
+  return { publicKey: publicKeyHex, privateKey };
+};
+
+const encryptMessage = (message, publicKeyHex) => {
+  try {
+    const publicKeyBytes = forge.util.hexToBytes(publicKeyHex);
+    const asn1 = forge.asn1.fromDer(publicKeyBytes);
+    const publicKey = forge.pki.publicKeyFromAsn1(asn1);
+
+    const encrypted = publicKey.encrypt(forge.util.encodeUtf8(message), 'RSA-OAEP', {
+      md: forge.md.sha256.create(),
+      mgf1: {
+        md: forge.md.sha256.create()
+      }
+    });
+
+    return forge.util.encode64(encrypted);
+  } catch (error) {
+    console.error('Encryption error:', error);
+    throw new Error('Failed to encrypt message: ' + error.message);
+  }
+};
+
+const decryptMessage = (encryptedMessage, privateKeyPem) => {
+  try {
+    const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+    const decoded = forge.util.decode64(encryptedMessage);
+    const decrypted = privateKey.decrypt(decoded, 'RSA-OAEP', {
+      md: forge.md.sha256.create(),
+      mgf1: {
+        md: forge.md.sha256.create()
+      }
+    });
+    return forge.util.decodeUtf8(decrypted);
+  } catch (error) {
+    console.error('Decryption error:', error);
+    throw new Error('Failed to decrypt message: ' + error.message);
+  }
+};
+
 module.exports = {
   generateKey,
   encryptData,
   decryptData,
   encryptShopData,
-  decryptShopData
+  decryptShopData,
+  generateKeyPair,
+  encryptMessage,
+  decryptMessage
 };
-

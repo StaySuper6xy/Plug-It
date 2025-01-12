@@ -4,8 +4,9 @@ const jwt = require('jsonwebtoken');
 const { check, validationResult } = require('express-validator');
 
 const User = require('../models/User');
-const Shop = require('../models/Shop'); // Add this line to import the Shop model
-const auth = require('../middleware/auth');
+const Shop = require('../models/Shop');
+const { authenticateToken } = require('../middleware/auth');
+const { generateKeyPair, encryptMessage } = require('../utils/encryption');
 
 // @route   POST api/users
 // @desc    Register a user
@@ -35,10 +36,15 @@ router.post(
         return res.status(400).json({ msg: 'User already exists' });
       }
 
+      // Generate key pair for the user
+      const { publicKey, privateKey } = generateKeyPair();
+
       user = new User({
         username,
         email,
         password,
+        publicKey,
+        encryptedPrivateKey: encryptMessage(privateKey, publicKey) // Encrypt private key with public key
       });
 
       await user.save();
@@ -55,7 +61,7 @@ router.post(
         { expiresIn: '24h' },
         (err, token) => {
           if (err) throw err;
-          res.json({ token });
+          res.json({ token, privateKey }); // Send back the token and unencrypted private key
         }
       );
     } catch (err) {
@@ -68,16 +74,14 @@ router.post(
 // @route   GET api/users/me
 // @desc    Get current user
 // @access  Private
-router.get('/me', auth, async (req, res) => {
+router.get('/me', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
       .select('-password')
-      .populate('shops', 'name _id'); // Include _id in the populated shops
+      .populate('shops', 'name _id');
     
-    // Fetch all shops associated with the user
     const shops = await Shop.find({ owner: req.user.id });
     
-    // Combine user data with shops
     const userData = user.toObject();
     userData.shops = shops;
 
@@ -92,7 +96,7 @@ router.get('/me', auth, async (req, res) => {
 // @route   PUT api/users/role
 // @desc    Update user role
 // @access  Private
-router.put('/role', auth, async (req, res) => {
+router.put('/role', authenticateToken, async (req, res) => {
   try {
     const { role } = req.body;
     
@@ -115,6 +119,12 @@ router.put('/role', auth, async (req, res) => {
     console.error('Error updating user role:', error);
     res.status(500).json({ message: 'Server error' });
   }
+});
+
+// Catch-all route for debugging
+router.all('*', (req, res) => {
+  console.log(`Received ${req.method} request to ${req.originalUrl}`);
+  res.status(404).json({ message: 'Route not found in users.js' });
 });
 
 module.exports = router;

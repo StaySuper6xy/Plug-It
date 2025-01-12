@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const Shop = require('../models/Shop');
 const Product = require('../models/Product');
-const auth = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const gjv = require('geojson-validation');
 const { isValidCoordinates, isValidPolygon, isValidCircle } = require('../utils/validation');
+const { generateKeyPair, encryptMessage, decryptMessage } = require('../utils/encryption');
 
 // Set up multer for handling file uploads
 const storage = multer.diskStorage({
@@ -32,21 +33,19 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Get all shops
-router.get('/', auth, async (req, res) => {
+// Get all shops (replace the existing route that uses 'auth')
+router.get('/', authenticateToken, async (req, res) => {
   try {
-    console.log('Fetching shops for user:', req.user.id);
     const shops = await Shop.find({ owner: req.user.id });
-    console.log('Shops fetched:', shops);
     res.json(shops);
   } catch (err) {
-    console.error('Error fetching shops:', err);
-    res.status(500).json({ message: 'Server Error', error: err.message });
+    console.error(err.message);
+    res.status(500).send('Server Error');
   }
 });
 
 // Create a new shop
-router.post('/', auth, async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   const { 
     name, 
     description, 
@@ -57,6 +56,9 @@ router.post('/', auth, async (req, res) => {
   } = req.body;
 
   try {
+    // Generate key pair for the shop
+    const { publicKey, privateKey } = generateKeyPair();
+
     const newShop = new Shop({
       name,
       description,
@@ -64,39 +66,55 @@ router.post('/', auth, async (req, res) => {
       location: location || { type: 'Point', coordinates: [0, 0] },
       isPublic,
       fulfillmentOptions: fulfillmentOptions || { pickup: true, delivery: false, meetup: false },
-      owner: req.user.id
+      owner: req.user.id,
+      publicKey,
+      //encryptedShopKey: encryptMessage(privateKey, publicKey) // Encrypt private key with public key
     });
 
     const shop = await newShop.save();
-    res.json(shop);
+    
+    // Send back the shop data and the unencrypted private key
+    res.json({
+      success: true,
+      shop,
+      privateKey // Note: In a production environment, you'd want to handle this more securely
+    });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    console.error('Error creating shop:', err);
+    res.status(500).json({ success: false, message: 'Failed to create shop' });
   }
 });
 
 // Get shop by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const shop = await Shop.findById(req.params.id);
     if (!shop) {
-      return res.status(404).json({ msg: 'Shop not found' });
+      return res.status(404).json({ message: 'Shop not found' });
     }
-    res.json(shop);
+
+    console.log('Sending shop data:', shop);
+
+    res.json({
+      success: true,
+      shop: {
+        ...shop.toObject(),
+        publicKey: shop.publicKey // Ensure we're sending the public key
+      }
+    });
   } catch (err) {
-    console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Shop not found' });
-    }
-    res.status(500).send('Server Error');
+    console.error('Error fetching shop details:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch shop details' });
   }
 });
 
 // Update shop
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { encryptedAvailabilityArea, publicKey, ...otherFields } = req.body;
+    const { encryptedAvailabilityArea, fulfillmentOptions, ...otherFields } = req.body;
     
+    console.log('Updating shop with data:', { encryptedAvailabilityArea, fulfillmentOptions, ...otherFields });
+
     let shop = await Shop.findById(req.params.id);
     if (!shop) {
       return res.status(404).json({ message: 'Shop not found' });
@@ -112,12 +130,13 @@ router.put('/:id', auth, async (req, res) => {
     if (encryptedAvailabilityArea) {
       shop.encryptedAvailabilityArea = encryptedAvailabilityArea;
     }
-    
-    if (publicKey) {
-      shop.publicKey = publicKey;
+
+    if (fulfillmentOptions) {
+      shop.fulfillmentOptions = fulfillmentOptions;
     }
 
     const updatedShop = await shop.save();
+    console.log('Updated shop:', updatedShop);
     res.json(updatedShop);
   } catch (err) {
     console.error('Error updating shop:', err);
@@ -126,38 +145,20 @@ router.put('/:id', auth, async (req, res) => {
 });
 
 // Delete shop
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const shop = await Shop.findById(req.params.id);
+
     if (!shop) {
       return res.status(404).json({ msg: 'Shop not found' });
     }
 
-    // Check user
     if (shop.owner.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'User not authorized' });
     }
 
-    await shop.remove();
+    await Shop.findByIdAndRemove(req.params.id);
     res.json({ msg: 'Shop removed' });
-  } catch (err) {
-    console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Shop not found' });
-    }
-    res.status(500).send('Server Error');
-  }
-});
-
-// Get products for a shop
-router.get('/:shopId/products', auth, async (req, res) => {
-  try {
-    const shop = await Shop.findById(req.params.shopId);
-    if (!shop) {
-      return res.status(404).json({ msg: 'Shop not found' });
-    }
-    const products = await Product.find({ shop: req.params.shopId });
-    res.json(products);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
@@ -165,7 +166,7 @@ router.get('/:shopId/products', auth, async (req, res) => {
 });
 
 // Create a new product
-router.post('/:shopId/products', auth, upload.array('images', 5), async (req, res) => {
+router.post('/:shopId/products', authenticateToken, upload.array('images', 5), async (req, res) => {
   console.log('Creating new product');
   try {
     const shop = await Shop.findById(req.params.shopId);
@@ -187,7 +188,7 @@ router.post('/:shopId/products', auth, upload.array('images', 5), async (req, re
       inventory: req.body.inventory,
       inventoryUnit: req.body.inventoryUnit,
       customInventoryUnit: req.body.customInventoryUnit,
-      images: req.files ? req.files.map(file => `${file.filename}`) : [], // Handle case when no files are uploaded
+      images: req.files ? req.files.map(file => `${file.filename}`) : [],
       shop: req.params.shopId
     });
 
@@ -202,7 +203,7 @@ router.post('/:shopId/products', auth, upload.array('images', 5), async (req, re
 });
 
 // Update a product
-router.put('/:shopId/products/:productId', auth, upload.array('images'), async (req, res) => {
+router.put('/:shopId/products/:productId', authenticateToken, upload.array('images'), async (req, res) => {
   try {
     const product = await Product.findById(req.params.productId);
     if (!product) {
@@ -220,12 +221,10 @@ router.put('/:shopId/products/:productId', auth, upload.array('images'), async (
     product.inventoryUnit = inventoryUnit;
     product.customInventoryUnit = customInventoryUnit;
     
-    // Parse the prices JSON string
     if (prices) {
       product.prices = JSON.parse(prices);
     }
 
-    // Handle image updates
     if (req.files && req.files.length > 0) {
       const newImages = req.files.map(file => `/uploads/${file.filename}`);
       product.images = [...(req.body.imagesToKeep ? req.body.imagesToKeep.split(',') : []), ...newImages];
@@ -242,7 +241,7 @@ router.put('/:shopId/products/:productId', auth, upload.array('images'), async (
 });
 
 // Delete a product
-router.delete('/:shopId/products/:productId', auth, async (req, res) => {
+router.delete('/:shopId/products/:productId', authenticateToken, async (req, res) => {
   try {
     const shop = await Shop.findById(req.params.shopId);
     if (!shop) {
@@ -258,7 +257,6 @@ router.delete('/:shopId/products/:productId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    // Delete associated images
     for (const imagePath of product.images) {
       const fullPath = path.join(__dirname, '../..', imagePath);
       try {
@@ -278,8 +276,49 @@ router.delete('/:shopId/products/:productId', auth, async (req, res) => {
   }
 });
 
+// Get products for a shop
+router.get('/:shopId/products', authenticateToken, async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.shopId);
+    if (!shop) {
+      return res.status(404).json({ msg: 'Shop not found' });
+    }
+
+    // If the shop is private and the user is not the owner, deny access
+    if (!shop.isPublic && shop.owner.toString() !== req.user.id) {
+      return res.status(403).json({ msg: 'Access denied' });
+    }
+
+    const products = await Product.find({ shop: req.params.shopId });
+    res.json(products);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const shop = await Shop.findById(req.params.id);
+
+    if (!shop) {
+      return res.status(404).json({ msg: 'Shop not found' });
+    }
+
+    if (shop.owner.toString() !== req.user.id) {
+      return res.status(401).json({ msg: 'User not authorized' });
+    }
+
+    await Shop.findByIdAndRemove(req.params.id);
+    res.json({ msg: 'Shop removed' });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
 // Update shop status
-router.put('/:id/status', auth, async (req, res) => {
+router.put('/:id/status', authenticateToken, async (req, res) => {
   const { status } = req.body;
 
   try {
@@ -288,7 +327,6 @@ router.put('/:id/status', auth, async (req, res) => {
       return res.status(404).json({ msg: 'Shop not found' });
     }
 
-    // Check user
     if (shop.owner.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'User not authorized' });
     }

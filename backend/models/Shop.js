@@ -106,6 +106,10 @@ const ShopSchema = new mongoose.Schema({
     type: String
   },
   publicKey: {
+    type: String,
+    required: true
+  },
+  encryptedShopKey: {
     type: String
   }
 }, { timestamps: true });

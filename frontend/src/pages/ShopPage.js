@@ -33,17 +33,24 @@ export default function ShopPage() {
           api.get(`/shops/${shopId}/products`)
         ]);
         
-        let shopData = shopResponse.data;
+        let shopData = shopResponse.data.shop;
+        console.log('Fetched shop data:', shopData);
+
         if (shopData.encryptedAvailabilityArea) {
-          const keys = JSON.parse(localStorage.getItem(`shop_${shopId}_keys`));
-          if (keys) {
+          const key = localStorage.getItem(`shop_${shopId}_key`);
+          if (key) {
             try {
-              const decryptedArea = decryptAvailabilityArea(shopData.encryptedAvailabilityArea, keys.privateKey);
+              const decryptedArea = decryptAvailabilityArea(shopData.encryptedAvailabilityArea, key);
+              console.log('Decrypted availability area:', decryptedArea);
               shopData = { ...shopData, availabilityArea: decryptedArea };
             } catch (error) {
               console.error('Error decrypting availability area:', error);
             }
+          } else {
+            console.error('No encryption key found for shop');
           }
+        } else {
+          console.warn('No encrypted availability area for shop');
         }
         
         setShop(shopData);
@@ -142,28 +149,22 @@ export default function ShopPage() {
         <Box sx={{ mb: 4 }}>
           <Typography variant="h6" gutterBottom>Available Fulfillment Options:</Typography>
           <List>
-            {shop.fulfillmentOptions.pickup && (
+            {shop.fulfillmentOptions ? (
+              Object.entries(shop.fulfillmentOptions)
+                .filter(([_, value]) => value)
+                .map(([option, _]) => (
+                  <ListItem key={option}>
+                    <ListItemIcon>
+                      {option === 'pickup' && <Store />}
+                      {option === 'delivery' && <LocalShipping />}
+                      {option === 'meetup' && <MeetingRoom />}
+                    </ListItemIcon>
+                    <ListItemText primary={option.charAt(0).toUpperCase() + option.slice(1)} />
+                  </ListItem>
+                ))
+            ) : (
               <ListItem>
-                <ListItemIcon>
-                  <Store />
-                </ListItemIcon>
-                <ListItemText primary="Pickup" />
-              </ListItem>
-            )}
-            {shop.fulfillmentOptions.delivery && (
-              <ListItem>
-                <ListItemIcon>
-                  <LocalShipping />
-                </ListItemIcon>
-                <ListItemText primary="Delivery" />
-              </ListItem>
-            )}
-            {shop.fulfillmentOptions.meetup && (
-              <ListItem>
-                <ListItemIcon>
-                  <MeetingRoom />
-                </ListItemIcon>
-                <ListItemText primary="Meetup" />
+                <ListItemText primary="No fulfillment options available" />
               </ListItem>
             )}
           </List>

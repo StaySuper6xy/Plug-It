@@ -66,4 +66,3 @@ const CartContents = ({ cart, updateItemQuantity, removeItem, onNext }) => {
 };
 
 export default CartContents;
-

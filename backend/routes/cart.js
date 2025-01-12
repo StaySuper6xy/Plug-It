@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 
 // Get user's cart
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     let cart = await Cart.findOne({ user: req.user.id }).populate('items.product');
     if (!cart) {
@@ -20,7 +20,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Add item to cart
-router.post('/add', auth, async (req, res) => {
+router.post('/add', authenticateToken, async (req, res) => {
   try {
     const { productId, quantity, shopId, price } = req.body;
     let cart = await Cart.findOne({ user: req.user.id });
@@ -52,7 +52,7 @@ router.post('/add', auth, async (req, res) => {
 });
 
 // Update item quantity in cart
-router.put('/update/:productId', auth, async (req, res) => {
+router.put('/update/:productId', authenticateToken, async (req, res) => {
   try {
     const { quantity } = req.body;
     const cart = await Cart.findOne({ user: req.user.id });
@@ -80,7 +80,7 @@ router.put('/update/:productId', auth, async (req, res) => {
 });
 
 // Remove item from cart
-router.delete('/remove/:productId', auth, async (req, res) => {
+router.delete('/remove/:productId', authenticateToken, async (req, res) => {
   try {
     const cart = await Cart.findOne({ user: req.user.id });
 
@@ -100,7 +100,7 @@ router.delete('/remove/:productId', auth, async (req, res) => {
 });
 
 // Update fulfillment option
-router.put('/fulfillment', auth, async (req, res) => {
+router.put('/fulfillment', authenticateToken, async (req, res) => {
   try {
     const { fulfillmentOption } = req.body;
     const cart = await Cart.findOne({ user: req.user.id });
@@ -115,6 +115,25 @@ router.put('/fulfillment', auth, async (req, res) => {
     res.json(cart);
   } catch (err) {
     console.error('Error updating fulfillment option:', err);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
+
+// Clear cart
+router.delete('/clear', authenticateToken, async (req, res) => {
+  try {
+    const cart = await Cart.findOne({ user: req.user.id });
+    if (!cart) {
+      return res.status(404).json({ message: 'Cart not found' });
+    }
+
+    cart.items = [];
+    cart.totalAmount = 0; //Added to clear total amount as well
+    await cart.save();
+
+    res.json({ message: 'Cart cleared successfully' });
+  } catch (err) {
+    console.error('Error clearing cart:', err);
     res.status(500).json({ message: 'Server Error' });
   }
 });

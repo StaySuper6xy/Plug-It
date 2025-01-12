@@ -59,11 +59,15 @@ const ManageShop = () => {
   const handleShopUpdate = async (updatedShop) => {
     try {
       let availabilityArea = updatedShop.availabilityArea;
+      console.log('Updating availability area:', availabilityArea);
       if (availabilityArea.type === 'Circle') {
         const center = availabilityArea.center.map(coord => parseFloat(coord));
         const radius = parseFloat(availabilityArea.radius);
         
+        console.log('Parsed circle data:', { center, radius });
+        
         if (!isValidCircle(center, radius)) {
+          console.error('Invalid circle data:', { center, radius });
           throw new Error('Invalid circle format for availability area');
         }
         
@@ -74,7 +78,9 @@ const ManageShop = () => {
         };
       } else if (availabilityArea.type === 'Polygon') {
         let coordinates = availabilityArea.coordinates[0].map(coord => coord.map(parseFloat));
+        console.log('Parsed polygon data:', coordinates);
         if (!isValidPolygon(coordinates)) {
+          console.error('Invalid polygon data:', coordinates);
           throw new Error('Invalid polygon format for availability area');
         }
         availabilityArea = {
@@ -84,6 +90,7 @@ const ManageShop = () => {
       }
 
       const key = localStorage.getItem(`shop_${updatedShop._id}_key`) || generateKey();
+      console.log('Using key for encryption:', key);
       const encryptedAvailabilityArea = encryptAvailabilityArea(availabilityArea, key);
 
       const shopToUpdate = {

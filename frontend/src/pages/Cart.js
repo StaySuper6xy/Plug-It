@@ -47,7 +47,7 @@ const Cart = () => {
   const fetchShopDetails = async (shopId) => {
     try {
       const response = await api.get(`/shops/${shopId}`);
-      const shop = response.data;
+      const shop = response.data.shop;
       console.log('Fetched shop details:', shop);
       setShopDetails(shop);
 
@@ -55,6 +55,7 @@ const Cart = () => {
         const key = localStorage.getItem(`shop_${shopId}_key`);
         if (key) {
           const decryptedArea = decryptAvailabilityArea(shop.encryptedAvailabilityArea, key);
+          console.log('Decrypted availability area:', decryptedArea);
           setAvailabilityArea(decryptedArea);
           if (decryptedArea.type === 'Circle') {
             setMapCenter(decryptedArea.center);
