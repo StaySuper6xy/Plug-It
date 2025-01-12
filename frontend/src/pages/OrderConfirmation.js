@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Container, Typography, Paper, CircularProgress, Button } from '@mui/material';
+import { Container, Typography, Paper, CircularProgress, Button, Box } from '@mui/material';
 import api from '../utils/api';
 
 const OrderConfirmation = () => {
@@ -48,7 +48,9 @@ const OrderConfirmation = () => {
           Order Status: {orderStatus}
         </Typography>
         {orderStatus === 'pending' && (
-          <CircularProgress sx={{ display: 'block', margin: '20px auto' }} />
+          <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+            <CircularProgress />
+          </Box>
         )}
         {orderStatus === 'accepted' && (
           <>

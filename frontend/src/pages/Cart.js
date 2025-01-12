@@ -4,8 +4,9 @@ import {
   Snackbar, Alert,
   Stepper, Step, StepLabel, Paper
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
-import { decryptAvailabilityArea } from '../utils/encryption';
+import { decryptAvailabilityArea, encryptMessage } from '../utils/encryption';
 import CartContents from './CartContents';
 import FulfillmentOptions from './FulfillmentOptions';
 
@@ -20,6 +21,7 @@ const Cart = () => {
   const [fulfillmentOption, setFulfillmentOption] = useState('');
   const [shopDetails, setShopDetails] = useState(null);
   const [activeStep, setActiveStep] = useState(0);
+  const navigate = useNavigate();
 
   const fetchCart = useCallback(async () => {
     try {
@@ -47,7 +49,7 @@ const Cart = () => {
   const fetchShopDetails = async (shopId) => {
     try {
       const response = await api.get(`/shops/${shopId}`);
-      const shop = response.data.shop;
+      const shop = response.data.shop; // Access the shop data from the response
       console.log('Fetched shop details:', shop);
       setShopDetails(shop);
 
@@ -55,7 +57,6 @@ const Cart = () => {
         const key = localStorage.getItem(`shop_${shopId}_key`);
         if (key) {
           const decryptedArea = decryptAvailabilityArea(shop.encryptedAvailabilityArea, key);
-          console.log('Decrypted availability area:', decryptedArea);
           setAvailabilityArea(decryptedArea);
           if (decryptedArea.type === 'Circle') {
             setMapCenter(decryptedArea.center);
@@ -191,6 +192,39 @@ const Cart = () => {
     return R * c; // Distance in meters
   };
 
+  const prepareOrderData = () => {
+    return {
+      cartItems: cart.items,
+      totalAmount: cart.totalAmount,
+      fulfillmentOption,
+      location,
+      shopId: shopDetails._id,
+      buyerId: cart.userId, // Assuming the cart has the user ID
+      timestamp: new Date().toISOString(),
+    };
+  };
+
+  const sendOrder = async () => {
+    try {
+      const orderData = prepareOrderData();
+      console.log('Preparing to encrypt order data:', orderData);
+      console.log('Shop public key:', shopDetails.publicKey);
+
+      const encryptedOrder = await encryptMessage(JSON.stringify(orderData), shopDetails.publicKey);
+      console.log('Encrypted order:', encryptedOrder);
+
+      const response = await api.post('/orders', { encryptedOrder });
+      
+      if (response.data.success) {
+        navigate('/order-confirmation', { state: { orderId: response.data.orderId } });
+      } else {
+        setSnackbar({ open: true, message: 'Failed to place order. Please try again.', severity: 'error' });
+      }
+    } catch (error) {
+      console.error('Error sending order:', error);
+      setSnackbar({ open: true, message: 'An error occurred while placing the order.', severity: 'error' });
+    }
+  };
 
   if (loading) {
     return <Typography>Loading cart...</Typography>;
@@ -237,7 +271,7 @@ const Cart = () => {
             handleGetLocation={handleGetLocation}
             isWithinAvailabilityArea={isWithinAvailabilityArea}
             onBack={() => setActiveStep(0)}
-            onCheckout={() => {/* Implement checkout logic */}}
+            onCheckout={sendOrder}
           />
         )}
       </Paper>
